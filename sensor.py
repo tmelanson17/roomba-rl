@@ -2,7 +2,8 @@
 import math
 
 class Sensor:
-    def __init__(self, detection_threshold, tol=0.15):
+    # TODO: Get rid of these magick numbers
+    def __init__(self, detection_threshold, tol=0.25):
         self.detection_threshold = detection_threshold
         self._tol = tol
         self._angle_delta_left = math.pi / 4
