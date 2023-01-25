@@ -7,6 +7,7 @@ from particle import Pose, ParticleMap
 from sensor import Sensor
 import math
 
+
 try:
     import pygame
     from pygame import gfxdraw
@@ -99,13 +100,14 @@ class RoombaEnv(gym.Env):
             reward = 1
         # If moving backwards, then penalize
         elif action == 2:
-            reward = -1
+            reward = -2
         sensor_output = self._sensor.sense(self._roomba, self._particles)
         self._i += 1
         return np.array(sensor_output, dtype=np.float32), reward, self.terminated, {}
 
     # Need for the initial state
-    def reset(self):
+    # TODO : implement seed
+    def reset(self, seed):
         self._init_states()
         self.terminated = False
         sensor_output = self._sensor.sense(self._roomba, self._particles)
@@ -113,8 +115,9 @@ class RoombaEnv(gym.Env):
 
         
 
-    def render(self):
-        if self.screen is None and self.render_mode == "human":
+    def render(self, mode=None):
+        render_mode = mode if mode else self.render_mode
+        if self.screen is None and render_mode == "human":
             pygame.init()
             pygame.display.init()
             self.screen = pygame.display.set_mode((VIEWPORT_W, VIEWPORT_H))
@@ -177,25 +180,30 @@ class RoombaEnv(gym.Env):
                 (int(pos.x), int(pos.y)), # center
                 2, # radius
             )
-
-        if self.render_mode == "human":
+        
+        if render_mode == "human":
             assert self.screen is not None
             self.screen.blit(self.surf, (0, 0))
             pygame.event.pump()
             self.clock.tick(self.metadata["render_fps"])
             pygame.display.flip()
-        elif self.render_mode == "rgb_array":
+        elif render_mode == "rgb_array":
             return np.transpose(
                 np.array(pygame.surfarray.pixels3d(self.surf)), axes=(1, 0, 2)
             )
 
 if __name__ == '__main__':
-    env = RoombaEnv()
+    from video_recorder import VideoRecorder
+    env = RoombaEnv(render_mode="rgb_array")
+    video_recorder = VideoRecorder(env, enabled=True, path='random_actions.mp4')
     for i in range(100):
-        env.render()
+        video_recorder.capture_frame()
         state, reward, terminated, _ = env.step(env.action_space.sample())
         print(state)
         print(reward)
         print("===========")
         if terminated:
-            exit(0)
+            break
+    print(video_recorder.path)
+    print(len(video_recorder.recorded_frames))
+    video_recorder.close()
