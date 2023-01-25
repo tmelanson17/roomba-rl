@@ -41,7 +41,7 @@ def rotate(dp,theta):
 
 class RoombaEnv(gym.Env):
     metadata = {
-        "render_modes": ["human", "rgb_array"],
+        "render.modes": ["human", "rgb_array"],
         "render_fps": FPS,
     }
 
@@ -107,7 +107,7 @@ class RoombaEnv(gym.Env):
 
     # Need for the initial state
     # TODO : implement seed
-    def reset(self, seed):
+    def reset(self, seed=0):
         self._init_states()
         self.terminated = False
         sensor_output = self._sensor.sense(self._roomba, self._particles)
@@ -193,7 +193,7 @@ class RoombaEnv(gym.Env):
             )
 
 if __name__ == '__main__':
-    from video_recorder import VideoRecorder
+    from gym.wrappers.monitoring.video_recorder import VideoRecorder
     env = RoombaEnv(render_mode="rgb_array")
     video_recorder = VideoRecorder(env, enabled=True, path='random_actions.mp4')
     for i in range(100):
@@ -205,5 +205,4 @@ if __name__ == '__main__':
         if terminated:
             break
     print(video_recorder.path)
-    print(len(video_recorder.recorded_frames))
     video_recorder.close()
