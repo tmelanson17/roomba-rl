@@ -2,12 +2,13 @@
 import math
 
 class Sensor:
-    def __init__(self, detection_threshold, tol=0.1):
-        self._threshold = detection_threshold
+    def __init__(self, detection_threshold, tol=0.15):
+        self.detection_threshold = detection_threshold
         self._tol = tol
         self._angle_delta_left = math.pi / 4
         self._angle_delta_center = 0
         self._angle_delta_right = -math.pi / 4
+        self.angles = [self._angle_delta_left, self._angle_delta_center, self._angle_delta_right]
 
     def sense(self, roomba, particles):
         readings = particles.get_readings(roomba.pose)
@@ -29,9 +30,9 @@ class Sensor:
             ) < self._tol and distance < min_right:
                 min_right = distance
         return (
-                min(min_left, self._threshold) / self._threshold,
-                min(min_center, self._threshold) / self._threshold,
-                min(min_right, self._threshold) / self._threshold,
+                min(min_left, self.detection_threshold) / self.detection_threshold,
+                min(min_center, self.detection_threshold) / self.detection_threshold,
+                min(min_right, self.detection_threshold) / self.detection_threshold,
         )
             
 

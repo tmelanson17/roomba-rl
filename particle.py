@@ -64,11 +64,11 @@ class ParticleMap():
 
 if __name__ == "__main__":
     p = RandomParticle(Pose(x=1, y=2, theta=0), speed=1)
-    orig_pos = p.pos
+    orig_pose = p.pose
     p.move() 
-    print(p.pos)
-    print((p.pos.x-orig_pos.x)**2 + (p.pos.y-orig_pos.y)**2)
+    print(p.pose)
+    print((p.pose.x-orig_pose.x)**2 + (p.pose.y-orig_pose.y)**2)
     
     pmap = ParticleMap(5, 5, 10)
     pmap.move()
-    print([r.pos for r in pmap._particles])
+    print([r.pose for r in pmap._particles])

@@ -6,7 +6,7 @@ from neural_network import create_Q_network, test_model
 def parse_args():
     parser = argparse.ArgumentParser(description="Test the Lunar Lander model.")
     parser.add_argument('--gamma', type=float, default=0.99, required=False, help="Gamma value")
-    parser.add_argument('--checkpoint', type=str, help="Saved model")
+    parser.add_argument('--checkpoint', type=str, help="Saved model", required=True)
     return parser.parse_args()
 
 if __name__ == '__main__':

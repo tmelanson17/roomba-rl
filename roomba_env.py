@@ -123,7 +123,8 @@ class RoombaEnv(gym.Env):
 
         self.surf = pygame.Surface((VIEWPORT_W, VIEWPORT_H))
 
-        pygame.transform.scale(self.surf, (SCALE, SCALE))
+        pygame.transform.scale(self.surf, (int(SCALE), int(SCALE)))
+
 
         # Draw roomba
         roomba_pose = self._roomba.pose
@@ -145,9 +146,24 @@ class RoombaEnv(gym.Env):
         ]
         pygame.draw.polygon(
             self.surf,
-            color=(255, 255, 255),
-            points=points
+            (255, 255, 255), # color
+            points # points
         )
+
+        # Draw sensor output
+        sensor_output = self._sensor.sense(self._roomba, self._particles)
+        for sensor_level, angle_sensor in zip(sensor_output, self._sensor.angles):
+            angle_global = angle_sensor + roomba_pose.theta
+            sensor_raw_dist = sensor_level * self._sensor.detection_threshold
+            pygame.draw.line(
+                    self.surf,
+                    (0, 255, 255), # color
+                    (x, y), # start_pos
+                    (
+                        int(x + sensor_raw_dist*math.cos(angle_global)), 
+                        int(y + sensor_raw_dist*math.sin(angle_global)),
+                    ), # end_pos
+            )
 
         # Draw objects
         for pos in self._particles.particles:
@@ -157,9 +173,9 @@ class RoombaEnv(gym.Env):
                 continue
             pygame.draw.circle(
                 self.surf,
-                color=(255,0,0),
-                center=(int(pos.x), int(pos.y)),
-                radius=2,
+                (255,0,0), # color
+                (int(pos.x), int(pos.y)), # center
+                2, # radius
             )
 
         if self.render_mode == "human":
