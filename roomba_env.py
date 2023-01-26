@@ -39,6 +39,8 @@ def rotate(dp,theta):
         dx*math.sin(theta) + dy*math.cos(theta)
     )
 
+# TODO : implement wraparound
+# TODO : make sure particles don't spawn on top of roomba
 class RoombaEnv(gym.Env):
     metadata = {
         "render.modes": ["human", "rgb_array"],
