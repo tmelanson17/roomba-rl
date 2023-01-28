@@ -43,7 +43,7 @@ def rotate(dp,theta):
 # TODO : make sure particles don't spawn on top of roomba
 class RoombaEnv(gym.Env):
     metadata = {
-        "render.modes": ["human", "rgb_array"],
+        "render.modes": ["rgb_array", "human"],
         "render_fps": FPS,
     }
 
@@ -70,7 +70,7 @@ class RoombaEnv(gym.Env):
         self._i = 0
 
 
-    def __init__(self, render_mode="human", max_episode_steps=1000) -> None:
+    def __init__(self, render_mode="rgb_array", max_episode_steps=1000) -> None:
         super().__init__()
         self.action_space = spaces.Discrete(4)
         low = np.array([0.0, 0.0, 0.0]).astype(np.float32)
@@ -118,7 +118,8 @@ class RoombaEnv(gym.Env):
         
 
     def render(self, mode=None):
-        render_mode = mode if mode else self.render_mode
+        # render_mode = mode if mode else self.render_mode
+        render_mode = self.render_mode
         if self.screen is None and render_mode == "human":
             pygame.init()
             pygame.display.init()
