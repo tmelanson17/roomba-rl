@@ -59,11 +59,17 @@ class RoombaEnv(gym.Env):
             dx=LINEAR_SPEED/FPS,
             dtheta=ROTATIONAL_SPEED/FPS
         )
+        roomba_buffer=50
+        free_space = (
+            (roomba_start_x - roomba_buffer, roomba_start_y - roomba_buffer),
+            (roomba_start_x + roomba_buffer, roomba_start_y + roomba_buffer),
+        )
         self._particles = ParticleMap(
             N_PARTICLES,
             VIEWPORT_W,
             VIEWPORT_H, 
-            PARTICLE_SPEED,
+            free_space=free_space,
+            max_dist=PARTICLE_SPEED,
             collision_dist=COLLISION_DIST
         )
         self._sensor = Sensor(SENSOR_DETECTION_THRESHOLD)
@@ -198,7 +204,9 @@ class RoombaEnv(gym.Env):
 
 if __name__ == '__main__':
     from gym.wrappers.monitoring.video_recorder import VideoRecorder
-    # Up the speed to see wraparound
+    # Stress test
+    N_PARTICLES=1000
+    SPEED=5
     env = RoombaEnv(render_mode="rgb_array")
     video_recorder = VideoRecorder(env, enabled=True, path='random_actions.mp4')
     for i in range(100):

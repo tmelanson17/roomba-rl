@@ -32,7 +32,7 @@ class BaseParticle():
             maxy = bounds[1]
         else:
             minx, miny = bounds[0]
-            maxx, max_y = bounds[1]
+            maxx, maxy = bounds[1]
         x_adjusted = self.pose.x - minx 
         y_adjusted = self.pose.y - miny 
         maxx_adjusted = maxx - minx
@@ -55,22 +55,42 @@ class RandomParticle(BaseParticle):
 
     def move(self, bounds):
         dist = self._speed 
-        dtheta = self._rnd.random() * 2 * math.pi
+        dtheta = self._rnd.random() * math.pi / 4
         self._move_distance(dist, dtheta)
         return self.wraparound(bounds)
 
+# Helper funtion to determine if pose is in free space
+def is_in_free_space(pose, free_space):
+    if free_space is None:
+        return False
+    # TODO : make this a separate function for ease of use
+    if type(free_space[0]) == int:
+        minx = miny = 0
+        maxx = free_space[0]
+        maxy = free_space[1]
+    else:
+        minx, miny = free_space[0]
+        maxx, maxy = free_space[1]
+    return (
+        pose.x >= minx and pose.x <= maxx and
+        pose.y >= miny and pose.y <= maxy 
+    )
+    
 
 class ParticleMap():
-    def __init__(self, n_particles, x_bound, y_bound, max_dist=2, collision_dist=4):
+    def __init__(self, n_particles, x_bound, y_bound, free_space=None, max_dist=2, collision_dist=4):
         self._particles = []
         for i in range(n_particles):
-            start_pos = Pose(
-                x=random.random() * x_bound, 
-                y=random.random() * y_bound,
-                theta=0
-            )   
+            redo_particle_creation=True
+            while redo_particle_creation:
+                start_pos = Pose(
+                    x=random.random() * x_bound, 
+                    y=random.random() * y_bound,
+                    theta=0
+                )   
+                redo_particle_creation = is_in_free_space(start_pos, free_space)
             self._particles.append(
-                RandomParticle(start_pos, max_dist*random.random())
+                RandomParticle(start_pos, max_dist*random.random()) # TODO : make this random factor more obvious
             )
         self._collision_dist = collision_dist
         self._bounds = (x_bound, y_bound)
@@ -108,6 +128,11 @@ if __name__ == "__main__":
     
     pmap = ParticleMap(5, 5, 10)
     pmap.move()
+    print([r.pose for r in pmap._particles])
+
+    free_space = ((2, 5), (4, 9))
+    pmap = ParticleMap(5, 5, 10, free_space=free_space)
+    print(f"Should be no particles within {free_space}")
     print([r.pose for r in pmap._particles])
 
     p = BaseParticle(Pose(x=5, y=8, theta=0))
