@@ -1,6 +1,6 @@
 import enum
 import math
-from particle import Pose
+from particle import Pose, BaseParticle
 
 class Action(enum.Enum):
   FORWARD=0
@@ -8,28 +8,23 @@ class Action(enum.Enum):
   BACKWARD=2
   RIGHT=3
 
-class Roomba:
+class Roomba(BaseParticle):
     def __init__(self, pos: Pose, dx: float, dtheta: float) -> None:
-        self._pos = pos 
+        super().__init__(pos)
         self._dx = dx
         self._dtheta = dtheta
 
-    def move(self, action: int):
-        x, y = self._pos.x, self._pos.y
-        theta = self._pos.theta
+    def move(self, action: int, bounds: tuple):
         action_enum = Action(action)
         if action_enum == Action.FORWARD:
-            x += self._dx * math.cos(theta) 
-            y += self._dx * math.sin(theta) 
+            self._move_distance(self._dx, self._dtheta)
         elif action_enum == Action.LEFT:
-            theta += self._dtheta 
+            self._move_distance(0, self._dtheta)
         elif action_enum == Action.BACKWARD:
-            x -= self._dx * math.cos(theta)
-            y -= self._dx * math.sin(theta)
+            self._move_distance(-self._dx, self._dtheta)
         elif action_enum == Action.RIGHT:
-            theta -= self._dtheta
-        self._pos = Pose(x=x, y=y, theta=theta)
+            self._move_distance(0, -self._dtheta)
+        self.wraparound(bounds)
 
-    @property
     def pose(self):
       return self._pos
