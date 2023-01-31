@@ -32,16 +32,16 @@ if __name__ == '__main__':
     n_actions = env.action_space.n
     args = parse_args()
     ppo = PPO(policy='MlpPolicy', env=env, verbose=True)
-    ppo.learn(100000)
+    #ppo.learn(100000)
     output_file = './ppo-default' #.format(args.gamma, args.episodes, args.C, args.replay_memory_size)
-    ppo.save(output_file)
-    #ppo.load(output_file)
+    #ppo.save(output_file)
+    ppo.load(output_file)
     model_architecture = 'PPO'
     model = ppo
     model_name = f"{model_architecture}-default"
     # TODO: replace culteejen with username
     repo_id = f"culteejen/{model_name}-{env_id}"
-    eval_env = make_vec_env(create_roomba_env, n_envs=4)
+    eval_env = make_vec_env(create_roomba_env, n_envs=1)
     package_to_hub(
            model=model, # Our trained model
            model_name=model_name, # The name of our trained model
