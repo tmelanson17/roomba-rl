@@ -55,7 +55,7 @@ class RandomParticle(BaseParticle):
 
     def move(self, bounds):
         dist = self._speed 
-        dtheta = self._rnd.random() * math.pi / 4
+        dtheta = (self._rnd.random()-0.5) * math.pi
         self._move_distance(dist, dtheta)
         return self.wraparound(bounds)
 
