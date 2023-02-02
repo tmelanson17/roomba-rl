@@ -32,9 +32,9 @@ if __name__ == '__main__':
     n_actions = env.action_space.n
     args = parse_args()
     ppo = PPO(policy='MlpPolicy', env=env, verbose=True)
-    #ppo.learn(100000)
+    ppo.learn(100000)
     output_file = './ppo-default' #.format(args.gamma, args.episodes, args.C, args.replay_memory_size)
-    #ppo.save(output_file)
+    ppo.save(output_file)
     ppo.load(output_file)
     model_architecture = 'PPO'
     model = ppo
