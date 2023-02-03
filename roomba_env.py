@@ -6,6 +6,9 @@ from roomba import *
 from particle import Pose, ParticleMap
 from sensor import Sensor
 import math
+import random
+from dataclasses import dataclass
+
 
 
 try:
@@ -32,6 +35,15 @@ SENSOR_DETECTION_THRESHOLD=50
 
 COLLISION_DIST=8
 
+@dataclass
+class RoombaEnvConfig():
+    n_particles: int = N_PARTICLES
+    particle_speed: int = PARTICLE_SPEED
+    viewport_width: int = VIEWPORT_W
+    viewport_height: int = VIEWPORT_H
+    sensor_detection_threshold: int = SENSOR_DETECTION_THRESHOLD
+    collision_dist: int = COLLISION_DIST
+
 def rotate(dp,theta):
     dx, dy = dp
     return (
@@ -39,7 +51,8 @@ def rotate(dp,theta):
         dx*math.sin(theta) + dy*math.cos(theta)
     )
 
-# TODO : implement wraparound
+
+
 # TODO : make sure particles don't spawn on top of roomba
 class RoombaEnv(gym.Env):
     metadata = {
@@ -47,9 +60,9 @@ class RoombaEnv(gym.Env):
         "render_fps": FPS,
     }
 
-    def _init_states(self):
-        roomba_start_x = VIEWPORT_W // 2
-        roomba_start_y = VIEWPORT_H // 2
+    def _init_states(self, config: RoombaEnvConfig) -> None:
+        roomba_start_x = config.viewport_width // 2
+        roomba_start_y = config.viewport_height // 2
         self._roomba = Roomba(
             pos=Pose(
                 x=roomba_start_x,
@@ -59,31 +72,33 @@ class RoombaEnv(gym.Env):
             dx=LINEAR_SPEED/FPS,
             dtheta=ROTATIONAL_SPEED/FPS
         )
-        roomba_buffer=50
+        roomba_buffer=5
         free_space = (
             (roomba_start_x - roomba_buffer, roomba_start_y - roomba_buffer),
             (roomba_start_x + roomba_buffer, roomba_start_y + roomba_buffer),
         )
         self._particles = ParticleMap(
-            N_PARTICLES,
-            VIEWPORT_W,
-            VIEWPORT_H, 
+            config.n_particles,
+            config.viewport_width,
+            config.viewport_height, 
             free_space=free_space,
-            max_dist=PARTICLE_SPEED,
-            collision_dist=COLLISION_DIST
+            max_dist=config.particle_speed,
+            collision_dist=config.collision_dist
         )
         self._sensor = Sensor(SENSOR_DETECTION_THRESHOLD)
         self._i = 0
         self._bounds = (VIEWPORT_W, VIEWPORT_H)
 
 
-    def __init__(self, render_mode="rgb_array", max_episode_steps=1000) -> None:
+    def __init__(self, roomba_env_config=None, render_mode="rgb_array", max_episode_steps=1000) -> None:
         super().__init__()
+        if roomba_env_config is None:
+            roomba_env_config = RoombaEnvConfig()
         self.action_space = spaces.Discrete(4)
         low = np.array([0.0, 0.0, 0.0]).astype(np.float32)
         high = np.array([1.0, 1.0, 1.0]).astype(np.float32)
         self.observation_space = spaces.Box(low, high)
-        self._init_states()
+        self._init_states(roomba_env_config)
         self._max_episode_steps = 200
         self.render_mode = render_mode
         self.screen: pygame.Surface = None
@@ -122,7 +137,6 @@ class RoombaEnv(gym.Env):
         sensor_output = self._sensor.sense(self._roomba, self._particles)
         return np.array(sensor_output, dtype=np.float32)
 
-        
 
     def render(self, mode=None):
         # render_mode = mode if mode else self.render_mode
@@ -202,6 +216,139 @@ class RoombaEnv(gym.Env):
                 np.array(pygame.surfarray.pixels3d(self.surf)), axes=(1, 0, 2)
             )
 
+
+class RoombaEnvAToB(gym.Env):
+    metadata = {
+        "render.modes": ["rgb_array", "human"],
+        "render_fps": FPS,
+    }
+
+    def _init_states(self, seed=0):
+        self._rnd = random.Random(seed)
+        self.goal = (
+                self._rnd.random()*self.config.viewport_width, 
+                self._rnd.random()*self.config.viewport_height, 
+        )
+        roomba_start_x = self.config.viewport_width // 2
+        roomba_start_y = self.config.viewport_height // 2
+        self._roomba = Roomba(
+            pos=Pose(
+                x=roomba_start_x,
+                y=roomba_start_y,
+                theta=0.
+            ), 
+            dx=LINEAR_SPEED/FPS,
+            dtheta=ROTATIONAL_SPEED/FPS
+        )
+        self.terminated = False
+        self._i = 0
+        self._bounds = (VIEWPORT_W, VIEWPORT_H)
+        
+    def __init__(self, roomba_env_config=None, render_mode="rgb_array", max_episode_steps=1000) -> None:
+        super().__init__()
+        if roomba_env_config is None:
+            roomba_env_config = RoombaEnvConfig()
+        self.config = roomba_env_config
+        self.action_space = spaces.Discrete(4)
+        low = np.array([0.0, 0.0]).astype(np.float32)
+        high = np.array([self.config.viewport_width, self.config.viewport_height]).astype(np.float32)
+        self.observation_space = spaces.Box(low, high)
+        self._init_states()
+        self._max_episode_steps = 200
+        self.render_mode = render_mode
+        self.screen: pygame.Surface = None
+        self.clock = None
+        self.config = roomba_env_config
+
+    def step(self, action):
+        # Reward is based on distance
+        if self._i >= self._max_episode_steps:
+            self.terminated = True
+        if self.terminated:
+            return (0,0), 0, self.terminated, {}
+        self._roomba.move(action, self._bounds)
+        distance = (
+                (self.goal[0] - self._roomba.pose[0]),
+                (self.goal[1] - self._roomba.pose[1]),
+        )
+        obs = (abs(distance[0]), abs(distance[1]))
+        reward = -(distance[0]**2 + distance[1]**2)
+        # You reached the goal!
+        if reward > -self.config.collision_dist**2:
+            reward = 100
+            self.terminated = True
+        self._i += 1
+        return obs, reward, self.terminated, {}
+
+    def reset(self, seed=0):
+        self._init_states(seed)
+
+    def render(self, mode=None):
+        # render_mode = mode if mode else self.render_mode
+        render_mode = self.render_mode
+        if self.screen is None and render_mode == "human":
+            pygame.init()
+            pygame.display.init()
+            self.screen = pygame.display.set_mode((VIEWPORT_W, VIEWPORT_H))
+        if self.clock is None:
+            self.clock = pygame.time.Clock()
+
+        self.surf = pygame.Surface((VIEWPORT_W, VIEWPORT_H))
+
+        pygame.transform.scale(self.surf, (int(SCALE), int(SCALE)))
+
+
+        # Draw roomba
+        roomba_pose = self._roomba.pose
+        x = int(roomba_pose.x) 
+        y = int(roomba_pose.y) 
+        dps = [
+            (2, 0),
+            (6, 6),
+            (0, 8),
+            (-6, 6),
+            (-8, 0),
+            (-6, -6),
+            (0, -8),
+            (6, -6)
+        ]
+        rotated_dp = [rotate(p, roomba_pose.theta) for p in dps]
+        points = [
+            (int(x + p[0]), int(y + p[1])) for p in rotated_dp
+        ]
+        pygame.draw.polygon(
+            self.surf,
+            (255, 255, 255), # color
+            points # points
+        )
+
+        # Draw goal as crosshair
+        CROSSHAIR_LENGTH = 3
+        pygame.draw.line(
+            self.surf,
+            (0, 255, 255), # color
+            (int(self.goal[0] - CROSSHAIR_LENGTH), int(self.goal[1])), # start_pos
+            (int(self.goal[0] + CROSSHAIR_LENGTH), int(self.goal[1])), # end_pos
+        )
+        pygame.draw.line(
+            self.surf,
+            (0, 255, 255), # color
+            (int(self.goal[0]), int(self.goal[1] - CROSSHAIR_LENGTH)), # start_pos
+            (int(self.goal[0]), int(self.goal[1] + CROSSHAIR_LENGTH)), # end_pos
+        )
+        
+        if render_mode == "human":
+            assert self.screen is not None
+            self.screen.blit(self.surf, (0, 0))
+            pygame.event.pump()
+            self.clock.tick(self.metadata["render_fps"])
+            pygame.display.flip()
+        elif render_mode == "rgb_array":
+            return np.transpose(
+                np.array(pygame.surfarray.pixels3d(self.surf)), axes=(1, 0, 2)
+            )
+
+
 if __name__ == '__main__':
     from gym.wrappers.monitoring.video_recorder import VideoRecorder
     # Stress test
@@ -219,3 +366,17 @@ if __name__ == '__main__':
             break
     print(video_recorder.path)
     video_recorder.close()
+
+    # Test the new env
+    env_a_to_b = RoombaEnvAToB(render_mode="rgb_array")
+    video_recorder_a_to_b = VideoRecorder(env_a_to_b, enabled=True, path='a_to_b.mp4')
+    for i in range(100):
+        video_recorder_a_to_b.capture_frame()
+        state, reward, terminated, _ = env_a_to_b.step(env_a_to_b.action_space.sample())
+        print(state)
+        print(reward)
+        print("===========")
+        if terminated:
+            break
+    print(video_recorder_a_to_b.path)
+    video_recorder_a_to_b.close()
