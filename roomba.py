@@ -17,11 +17,11 @@ class Roomba(BaseParticle):
     def move(self, action: int, bounds: tuple):
         action_enum = Action(action)
         if action_enum == Action.FORWARD:
-            self._move_distance(self._dx, self._dtheta)
+            self._move_distance(self._dx, 0)
         elif action_enum == Action.LEFT:
             self._move_distance(0, self._dtheta)
         elif action_enum == Action.BACKWARD:
-            self._move_distance(-self._dx, self._dtheta)
+            self._move_distance(-self._dx, 0)
         elif action_enum == Action.RIGHT:
             self._move_distance(0, -self._dtheta)
         self.wraparound(bounds)

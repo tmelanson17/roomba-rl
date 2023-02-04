@@ -43,6 +43,7 @@ class RoombaEnvConfig():
     viewport_height: int = VIEWPORT_H
     sensor_detection_threshold: int = SENSOR_DETECTION_THRESHOLD
     collision_dist: int = COLLISION_DIST
+    fuel_cost: float = 0.1
 
 def rotate(dp,theta):
     dx, dy = dp
@@ -243,6 +244,8 @@ class RoombaEnvAToB(gym.Env):
         self.terminated = False
         self._i = 0
         self._bounds = (VIEWPORT_W, VIEWPORT_H)
+        obs, self._last_distance = self.measure()
+        return obs
         
     def __init__(self, roomba_env_config=None, render_mode="rgb_array", max_episode_steps=1000) -> None:
         super().__init__()
@@ -250,38 +253,49 @@ class RoombaEnvAToB(gym.Env):
             roomba_env_config = RoombaEnvConfig()
         self.config = roomba_env_config
         self.action_space = spaces.Discrete(4)
-        low = np.array([0.0, 0.0]).astype(np.float32)
-        high = np.array([self.config.viewport_width, self.config.viewport_height]).astype(np.float32)
+        # Observation space: (x, y, theta)
+        low = np.array([-self.config.viewport_width, -self.config.viewport_height, 0]).astype(np.float32)
+        high = np.array([self.config.viewport_width, self.config.viewport_height, math.pi]).astype(np.float32)
         self.observation_space = spaces.Box(low, high)
         self._init_states()
         self._max_episode_steps = 200
         self.render_mode = render_mode
         self.screen: pygame.Surface = None
         self.clock = None
-        self.config = roomba_env_config
+
+    # TODO:Move to sensor
+    def measure(self):
+        roomba_x, roomba_y, roomba_theta = self._roomba.pose
+        goal_x, goal_y = self.goal
+        obs = (
+                goal_x - roomba_x,
+                goal_y - roomba_y,
+                roomba_theta,
+        )
+        distance = math.sqrt(obs[0]**2 + obs[1]**2)
+        return np.array(obs, dtype=np.float32), distance
+
+    def calculate_reward(self, distance):
+        return self._last_distance - distance - self.config.fuel_cost
+
 
     def step(self, action):
         # Reward is based on distance
+        self._roomba.move(action, self._bounds)
         if self._i >= self._max_episode_steps:
             self.terminated = True
-        if self.terminated:
-            return (0,0), 0, self.terminated, {}
-        self._roomba.move(action, self._bounds)
-        distance = (
-                (self.goal[0] - self._roomba.pose[0]),
-                (self.goal[1] - self._roomba.pose[1]),
-        )
-        obs = (abs(distance[0]), abs(distance[1]))
-        reward = -(distance[0]**2 + distance[1]**2)
+        obs, distance = self.measure()
+        reward = self.calculate_reward(distance)
         # You reached the goal!
-        if reward > -self.config.collision_dist**2:
-            reward = 100
+        if distance < self.config.collision_dist:
+            reward += 100
             self.terminated = True
         self._i += 1
+        self._last_distance = distance
         return obs, reward, self.terminated, {}
 
     def reset(self, seed=0):
-        self._init_states(seed)
+        return self._init_states(seed)
 
     def render(self, mode=None):
         # render_mode = mode if mode else self.render_mode

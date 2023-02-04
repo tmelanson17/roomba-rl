@@ -4,7 +4,7 @@ import numpy as np
 import copy
 import argparse
 import sys
-from roomba_env import RoombaEnv
+from roomba_env import RoombaEnvAToB
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
@@ -25,15 +25,15 @@ def parse_args():
 if __name__ == '__main__':
     #env = gym.make('CartPole-v0')
     def create_roomba_env(max_episode_steps=1000):
-        return RoombaEnv(render_mode="rgb_array", max_episode_steps=max_episode_steps)
+        return RoombaEnvAToB(render_mode="rgb_array", max_episode_steps=max_episode_steps)
     
     env = make_vec_env(create_roomba_env, n_envs=4)
-    env_id = "Roomba"
+    env_id = "RoombaAToB"
     n_actions = env.action_space.n
     args = parse_args()
     ppo = PPO(policy='MlpPolicy', env=env, verbose=True)
-    ppo.learn(100000)
-    output_file = './ppo-default' #.format(args.gamma, args.episodes, args.C, args.replay_memory_size)
+    ppo.learn(150000)
+    output_file = './ppo-a-to-b' #.format(args.gamma, args.episodes, args.C, args.replay_memory_size)
     ppo.save(output_file)
     ppo.load(output_file)
     model_architecture = 'PPO'

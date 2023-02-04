@@ -3,7 +3,7 @@ import numpy as np
 import pathlib
 
 from gym.wrappers.monitoring.video_recorder import VideoRecorder
-from roomba_env import RoombaEnv
+from roomba_env import RoombaEnvAToB
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import (
@@ -18,7 +18,7 @@ def parse_args():
 
 if __name__ == '__main__':
     def create_roomba_env(max_episode_steps=1000):
-        return RoombaEnv(render_mode="rgb_array", max_episode_steps=max_episode_steps)
+        return RoombaEnvAToB(render_mode="rgb_array", max_episode_steps=max_episode_steps)
     args = parse_args()
     vec_env = make_vec_env(create_roomba_env, n_envs=1)
     directory= pathlib.Path("test_results/")
