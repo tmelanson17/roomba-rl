@@ -54,7 +54,6 @@ def rotate(dp,theta):
 
 
 
-# TODO : make sure particles don't spawn on top of roomba
 class RoombaEnv(gym.Env):
     metadata = {
         "render.modes": ["rgb_array", "human"],
@@ -295,7 +294,7 @@ class RoombaEnvAToB(gym.Env):
         return obs, reward, self.terminated, {}
 
     def reset(self, seed=0):
-        return self._init_states(seed)
+        return self._init_states(0)
 
     def render(self, mode=None):
         # render_mode = mode if mode else self.render_mode
