@@ -1,5 +1,4 @@
 # roomba-rl
-## Introduction
 
 This is a custom Reinforcement Learning environment for training a Roomba style robot to do point-to-point navigation, including with obstacle avoidance. 
 
