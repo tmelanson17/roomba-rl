@@ -43,7 +43,7 @@ class RoombaEnvConfig():
     viewport_height: int = VIEWPORT_H
     sensor_detection_threshold: int = SENSOR_DETECTION_THRESHOLD
     collision_dist: int = COLLISION_DIST
-    fuel_cost: float = 0.1
+    fuel_cost: float = 0.01
 
 def rotate(dp,theta):
     dx, dy = dp

@@ -33,7 +33,7 @@ if __name__ == '__main__':
     n_actions = env.action_space.n
     args = parse_args()
     model_architecture = args.model.upper()
-    model = create_model(model_architecture)
+    model = create_model(model_architecture, env)
     model.learn(150000)
     output_file = './{}-a-to-b'.format(model_architecture) #.format(args.gamma, args.episodes, args.C, args.replay_memory_size)
     model.save(output_file)
