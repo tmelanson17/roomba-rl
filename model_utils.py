@@ -7,3 +7,5 @@ def create_model(model_type, env, *args):
 def load_model(model_type, model_filename):
     if model_type == "PPO":
         return PPO.load(model_filename)
+    else:
+        raise ValueError("model type unknown")

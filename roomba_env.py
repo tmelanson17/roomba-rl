@@ -26,7 +26,7 @@ VIEWPORT_W = 600
 VIEWPORT_H = 400
 
 LINEAR_SPEED=20
-ROTATIONAL_SPEED=1.0
+ROTATIONAL_SPEED=5.0
 
 N_PARTICLES=100
 PARTICLE_SPEED=2
@@ -43,7 +43,7 @@ class RoombaEnvConfig():
     viewport_height: int = VIEWPORT_H
     sensor_detection_threshold: int = SENSOR_DETECTION_THRESHOLD
     collision_dist: int = COLLISION_DIST
-    fuel_cost: float = 0.1
+    fuel_cost: float = 0.01
 
 def rotate(dp,theta):
     dx, dy = dp
@@ -288,6 +288,7 @@ class RoombaEnvAToB(gym.Env):
         # You reached the goal!
         if distance < self.config.collision_dist:
             reward += 100
+            print(reward)
             self.terminated = True
         self._i += 1
         self._last_distance = distance
