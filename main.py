@@ -22,6 +22,7 @@ def parse_args():
     parser.add_argument('--replay_memory_size', type=int, default=10000)
     parser.add_argument('--model', type=str, default="ppo")
     parser.add_argument('--eval-only', action="store_true", default=False)
+    parser.add_argument('--train-only', action="store_true", default=False)
     return parser.parse_args()
 
 
@@ -37,19 +38,20 @@ if __name__ == '__main__':
     output_file = './{}-a-to-b'.format(model_architecture) #.format(args.gamma, args.episodes, args.C, args.replay_memory_size)
     if not args.eval_only:
         model = create_model(model_architecture, env)
-        model.learn(150000)
+        model.learn(300000)
         model.save(output_file)
-    model = load_model(model_architecture, output_file)
-    model_name = f"{model_architecture}-default"
-    # TODO: replace culteejen with username
-    repo_id = f"culteejen/{model_name}-{env_id}"
-    eval_env = make_vec_env(create_roomba_env, n_envs=1)
-    package_to_hub(
-           model=model, # Our trained model
-           model_name=model_name, # The name of our trained model
-           model_architecture=model_architecture, # The model architecture we used: in our case PPO
-           env_id=env_id, # Name of the environment
-           eval_env=eval_env, # Evaluation Environment
-           repo_id=repo_id, # id of the model repository from the Hugging Face Hub (repo_id = {organization}/{repo_name} for instance ThomasSimonini/ppo-LunarLander-v2
-           commit_message="Upload model to Hugging Face"
-    )
+    if not args.train_only:
+        model = load_model(model_architecture, output_file)
+        model_name = f"{model_architecture}-default"
+        # TODO: replace culteejen with username
+        repo_id = f"culteejen/{model_name}-{env_id}"
+        eval_env = make_vec_env(create_roomba_env, n_envs=1)
+        package_to_hub(
+               model=model, # Our trained model
+               model_name=model_name, # The name of our trained model
+               model_architecture=model_architecture, # The model architecture we used: in our case PPO
+               env_id=env_id, # Name of the environment
+               eval_env=eval_env, # Evaluation Environment
+               repo_id=repo_id, # id of the model repository from the Hugging Face Hub (repo_id = {organization}/{repo_name} for instance ThomasSimonini/ppo-LunarLander-v2
+               commit_message="Upload model to Hugging Face"
+        )

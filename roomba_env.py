@@ -26,14 +26,14 @@ VIEWPORT_W = 600
 VIEWPORT_H = 400
 
 LINEAR_SPEED=20
-ROTATIONAL_SPEED=5.0
+ROTATIONAL_SPEED=2.0
 
 N_PARTICLES=100
 PARTICLE_SPEED=2
 
 SENSOR_DETECTION_THRESHOLD=50
 
-COLLISION_DIST=8
+COLLISION_DIST=10
 
 @dataclass
 class RoombaEnvConfig():
@@ -224,7 +224,7 @@ class RoombaEnvAToB(gym.Env):
     }
 
     def _init_states(self, seed=0):
-        self._rnd = random.Random(seed)
+        self._rnd = random.Random()
         self.goal = (
                 self._rnd.random()*self.config.viewport_width, 
                 self._rnd.random()*self.config.viewport_height, 
@@ -266,10 +266,15 @@ class RoombaEnvAToB(gym.Env):
     def measure(self):
         roomba_x, roomba_y, roomba_theta = self._roomba.pose
         goal_x, goal_y = self.goal
+        dx = goal_x - roomba_x
+        dy = goal_y - roomba_y
+        # Calculate angle of goal to roomba
+
+        goal_theta = math.atan2(dy, dx)
         obs = (
                 goal_x - roomba_x,
                 goal_y - roomba_y,
-                roomba_theta,
+                goal_theta - roomba_theta,
         )
         distance = math.sqrt(obs[0]**2 + obs[1]**2)
         return np.array(obs, dtype=np.float32), distance
@@ -288,7 +293,6 @@ class RoombaEnvAToB(gym.Env):
         # You reached the goal!
         if distance < self.config.collision_dist:
             reward += 100
-            print(reward)
             self.terminated = True
         self._i += 1
         self._last_distance = distance
@@ -384,12 +388,13 @@ if __name__ == '__main__':
     # Test the new env
     env_a_to_b = RoombaEnvAToB(render_mode="rgb_array")
     video_recorder_a_to_b = VideoRecorder(env_a_to_b, enabled=True, path='a_to_b.mp4')
-    for i in range(100):
-        video_recorder_a_to_b.capture_frame()
-        state, reward, terminated, _ = env_a_to_b.step(env_a_to_b.action_space.sample())
-        print(state)
-        print(reward)
-        print("===========")
+    for i in range(4):
+        for j in range(25):
+            video_recorder_a_to_b.capture_frame()
+            state, reward, terminated, _ = env_a_to_b.step(i)
+            print(state)
+            print(reward)
+            print("===========")
         if terminated:
             break
     print(video_recorder_a_to_b.path)
