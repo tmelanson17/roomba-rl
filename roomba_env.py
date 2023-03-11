@@ -241,6 +241,21 @@ class RoombaEnvAToB(gym.Env):
             dtheta=ROTATIONAL_SPEED/FPS
         )
         self.terminated = False
+        # TODO: Make this a config param
+        roomba_buffer=5
+        free_space = (
+            (roomba_start_x - roomba_buffer, roomba_start_y - roomba_buffer),
+            (roomba_start_x + roomba_buffer, roomba_start_y + roomba_buffer),
+        )
+        self._particles = ParticleMap(
+            self.config.n_particles,
+            self.config.viewport_width,
+            self.config.viewport_height, 
+            free_space=free_space,
+            max_dist=self.config.particle_speed,
+            collision_dist=self.config.collision_dist
+        )
+        self._sensor = Sensor(SENSOR_DETECTION_THRESHOLD)
         self._i = 0
         self._bounds = (VIEWPORT_W, VIEWPORT_H)
         obs, self._last_distance = self.measure()
@@ -252,9 +267,14 @@ class RoombaEnvAToB(gym.Env):
             roomba_env_config = RoombaEnvConfig()
         self.config = roomba_env_config
         self.action_space = spaces.Discrete(4)
-        # Observation space: (x, y, theta)
-        low = np.array([-self.config.viewport_width, -self.config.viewport_height, 0]).astype(np.float32)
-        high = np.array([self.config.viewport_width, self.config.viewport_height, math.pi]).astype(np.float32)
+        # Observation space: (x, y, theta,) of goal
+        low = [-self.config.viewport_width, -self.config.viewport_height, 0]
+        high = [self.config.viewport_width, self.config.viewport_height, math.pi]
+        # Observation space: (s1, s2, s3) of sensor output
+        low += [0.0, 0.0, 0.0]
+        high += [1.0, 1.0, 1.0]
+        low = np.array(low, dtype=np.float32)
+        high = np.array(high, dtype=np.float32)
         self.observation_space = spaces.Box(low, high)
         self._init_states()
         self._max_episode_steps = 200
@@ -271,11 +291,12 @@ class RoombaEnvAToB(gym.Env):
         # Calculate angle of goal to roomba
 
         goal_theta = math.atan2(dy, dx)
+        sensor_output = self._sensor.sense(self._roomba, self._particles)
         obs = (
                 goal_x - roomba_x,
                 goal_y - roomba_y,
                 goal_theta - roomba_theta,
-        )
+        ) + sensor_output
         distance = math.sqrt(obs[0]**2 + obs[1]**2)
         return np.array(obs, dtype=np.float32), distance
 
@@ -286,6 +307,7 @@ class RoombaEnvAToB(gym.Env):
     def step(self, action):
         # Reward is based on distance
         self._roomba.move(action, self._bounds)
+        self._particles.move()
         if self._i >= self._max_episode_steps:
             self.terminated = True
         obs, distance = self.measure()
@@ -293,6 +315,10 @@ class RoombaEnvAToB(gym.Env):
         # You reached the goal!
         if distance < self.config.collision_dist:
             reward += 100
+            self.terminated = True
+        # You hit the particle :(
+        elif self._particles.detect_collision(self._roomba.pose):
+            reward = -100
             self.terminated = True
         self._i += 1
         self._last_distance = distance
@@ -354,6 +380,34 @@ class RoombaEnvAToB(gym.Env):
             (int(self.goal[0]), int(self.goal[1] - CROSSHAIR_LENGTH)), # start_pos
             (int(self.goal[0]), int(self.goal[1] + CROSSHAIR_LENGTH)), # end_pos
         )
+
+        # Draw sensor output
+        sensor_output = self._sensor.sense(self._roomba, self._particles)
+        for sensor_level, angle_sensor in zip(sensor_output, self._sensor.angles):
+            angle_global = angle_sensor + roomba_pose.theta
+            sensor_raw_dist = sensor_level * self._sensor.detection_threshold
+            pygame.draw.line(
+                    self.surf,
+                    (0, 255, 255), # color
+                    (x, y), # start_pos
+                    (
+                        int(x + sensor_raw_dist*math.cos(angle_global)), 
+                        int(y + sensor_raw_dist*math.sin(angle_global)),
+                    ), # end_pos
+            )
+
+        # Draw objects
+        for pos in self._particles.particles:
+            if pos.x < 0 or pos.y < 0:
+                continue
+            if pos.x > VIEWPORT_W or pos.y > VIEWPORT_H:
+                continue
+            pygame.draw.circle(
+                self.surf,
+                (255,0,0), # color
+                (int(pos.x), int(pos.y)), # center
+                2, # radius
+            )
         
         if render_mode == "human":
             assert self.screen is not None
