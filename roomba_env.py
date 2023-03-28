@@ -303,7 +303,6 @@ class RoombaEnvAToB(gym.Env):
     def calculate_reward(self, distance):
         return self._last_distance - distance - self.config.fuel_cost
 
-
     def step(self, action):
         # Reward is based on distance
         self._roomba.move(action, self._bounds)
@@ -340,7 +339,6 @@ class RoombaEnvAToB(gym.Env):
         self.surf = pygame.Surface((VIEWPORT_W, VIEWPORT_H))
 
         pygame.transform.scale(self.surf, (int(SCALE), int(SCALE)))
-
 
         # Draw roomba
         roomba_pose = self._roomba.pose
@@ -453,3 +451,4 @@ if __name__ == '__main__':
             break
     print(video_recorder_a_to_b.path)
     video_recorder_a_to_b.close()
+

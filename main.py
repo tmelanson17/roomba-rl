@@ -12,14 +12,8 @@ from huggingface_sb3 import package_to_hub
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Train a Lunar Lander model.")
-    parser.add_argument('--gamma', type=float, default=0.99, required=False, help="Gamma value")
-    parser.add_argument('--episodes', type=int, default=1500, required=False)
-    parser.add_argument('--C', type=int, default=50, required=False)
-    parser.add_argument('--learning_rate', type=float, default=0.00025)
-    parser.add_argument('--initial_epsilon', type=float, default=1.0)
-    parser.add_argument('--final_epsilon', type=float, default=0.1)
-    parser.add_argument('--replay_memory_size', type=int, default=10000)
+    parser = argparse.ArgumentParser(description="Train a Roomba model.")
+    parser.add_argument('--episodes', type=int, default=300000, required=False)
     parser.add_argument('--model', type=str, default="ppo")
     parser.add_argument('--eval-only', action="store_true", default=False)
     parser.add_argument('--train-only', action="store_true", default=False)
@@ -38,7 +32,7 @@ if __name__ == '__main__':
     output_file = './{}-a-to-b'.format(model_architecture) #.format(args.gamma, args.episodes, args.C, args.replay_memory_size)
     if not args.eval_only:
         model = create_model(model_architecture, env)
-        model.learn(300000)
+        model.learn(args.episodes)
         model.save(output_file)
     if not args.train_only:
         model = load_model(model_architecture, output_file)
