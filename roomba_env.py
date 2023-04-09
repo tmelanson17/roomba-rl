@@ -6,6 +6,7 @@ from roomba import *
 from particle import Pose, ParticleMap
 from sensor import Sensor
 import math
+from angle_math import compute_angle_diff
 import random
 from dataclasses import dataclass
 
@@ -25,15 +26,15 @@ P_SCALE = 10.0
 VIEWPORT_W = 600
 VIEWPORT_H = 400
 
-LINEAR_SPEED=20
-ROTATIONAL_SPEED=2.0
+LINEAR_SPEED=15
+ROTATIONAL_SPEED=1.0
 
 N_PARTICLES=100
-PARTICLE_SPEED=2
+PARTICLE_SPEED=1
 
-SENSOR_DETECTION_THRESHOLD=50
+SENSOR_DETECTION_THRESHOLD=100
 
-COLLISION_DIST=10
+COLLISION_DIST=15
 
 @dataclass
 class RoombaEnvConfig():
@@ -225,10 +226,15 @@ class RoombaEnvAToB(gym.Env):
 
     def _init_states(self, seed=0):
         self._rnd = random.Random()
+        # Hardcode the goal
         self.goal = (
-                self._rnd.random()*self.config.viewport_width, 
-                self._rnd.random()*self.config.viewport_height, 
+                3*self.config.viewport_width/4,
+                3*self.config.viewport_height/4,
         )
+        # self.goal = (
+        #         self._rnd.random()*self.config.viewport_width, 
+        #         self._rnd.random()*self.config.viewport_height, 
+        # )
         roomba_start_x = self.config.viewport_width // 2
         roomba_start_y = self.config.viewport_height // 2
         self._roomba = Roomba(
@@ -242,7 +248,7 @@ class RoombaEnvAToB(gym.Env):
         )
         self.terminated = False
         # TODO: Make this a config param
-        roomba_buffer=5
+        roomba_buffer=50
         free_space = (
             (roomba_start_x - roomba_buffer, roomba_start_y - roomba_buffer),
             (roomba_start_x + roomba_buffer, roomba_start_y + roomba_buffer),
@@ -258,8 +264,8 @@ class RoombaEnvAToB(gym.Env):
         self._sensor = Sensor(SENSOR_DETECTION_THRESHOLD)
         self._i = 0
         self._bounds = (VIEWPORT_W, VIEWPORT_H)
-        obs, self._last_distance = self.measure()
-        return obs
+        self._last_obs = self.measure()
+        return self._last_obs
         
     def __init__(self, roomba_env_config=None, render_mode="rgb_array", max_episode_steps=1000) -> None:
         super().__init__()
@@ -268,11 +274,11 @@ class RoombaEnvAToB(gym.Env):
         self.config = roomba_env_config
         self.action_space = spaces.Discrete(4)
         # Observation space: (x, y, theta,) of goal
-        low = [-self.config.viewport_width, -self.config.viewport_height, 0]
-        high = [self.config.viewport_width, self.config.viewport_height, math.pi]
+        low = [0, 0]
+        high = [self.config.viewport_width**2+self.config.viewport_height**2, math.pi]
         # Observation space: (s1, s2, s3) of sensor output
         low += [0.0, 0.0, 0.0]
-        high += [1.0, 1.0, 1.0]
+        high += [100.0, 100.0, 100.0]
         low = np.array(low, dtype=np.float32)
         high = np.array(high, dtype=np.float32)
         self.observation_space = spaces.Box(low, high)
@@ -292,35 +298,56 @@ class RoombaEnvAToB(gym.Env):
 
         goal_theta = math.atan2(dy, dx)
         sensor_output = self._sensor.sense(self._roomba, self._particles)
+        sensor_output = tuple(s*100 for s in sensor_output)
+        diff = compute_angle_diff(goal_theta, roomba_theta)
         obs = (
-                goal_x - roomba_x,
-                goal_y - roomba_y,
-                goal_theta - roomba_theta,
+                math.sqrt((goal_x - roomba_x)**2 + (goal_y - roomba_y)**2),
+                diff, 
         ) + sensor_output
-        distance = math.sqrt(obs[0]**2 + obs[1]**2)
-        return np.array(obs, dtype=np.float32), distance
+        return np.array(obs, dtype=np.float32)
 
-    def calculate_reward(self, distance):
-        return self._last_distance - distance - self.config.fuel_cost
+    def calculate_reward(self, obs):
+        d_theta = obs[1]
+        # TODO: Make this a parameter
+        OPPOSITE_THRESHOLD = math.pi/2
+        CLOSE_THRESHOLD = math.pi/8
+        # Three-tier : -1 if opposite direction, 1 if very close
+        if d_theta > OPPOSITE_THRESHOLD:
+            theta_reward = -2
+        elif d_theta < CLOSE_THRESHOLD:
+            theta_reward = 1
+        else:
+            theta_reward = 0
+        distance = obs[0]
+        last_distance = self._last_obs[0]
+        # You reached the goal!
+        if distance < self.config.collision_dist:
+            self.terminated = True
+            return 100
+        return (
+                theta_reward +
+                (last_distance - distance)
+                - self.config.fuel_cost
+        )
 
     def step(self, action):
         # Reward is based on distance
+        if self.terminated:
+            return None, 0, self.terminated, {}
         self._roomba.move(action, self._bounds)
         self._particles.move()
         if self._i >= self._max_episode_steps:
             self.terminated = True
-        obs, distance = self.measure()
-        reward = self.calculate_reward(distance)
-        # You reached the goal!
-        if distance < self.config.collision_dist:
-            reward += 100
-            self.terminated = True
+        obs = self.measure()
+        reward = self.calculate_reward(obs)
+        # print(f"Reward: {reward}")
         # You hit the particle :(
-        elif self._particles.detect_collision(self._roomba.pose):
-            reward = -100
-            self.terminated = True
         self._i += 1
-        self._last_distance = distance
+        self._last_obs = obs
+        if self._particles.detect_collision(self._roomba.pose):
+            reward = -200
+            self.terminated = True
+            obs = None
         return obs, reward, self.terminated, {}
 
     def reset(self, seed=0):
@@ -368,15 +395,17 @@ class RoombaEnvAToB(gym.Env):
         CROSSHAIR_LENGTH = 3
         pygame.draw.line(
             self.surf,
-            (0, 255, 255), # color
+            (255, 255, 0), # color
             (int(self.goal[0] - CROSSHAIR_LENGTH), int(self.goal[1])), # start_pos
             (int(self.goal[0] + CROSSHAIR_LENGTH), int(self.goal[1])), # end_pos
+            width=10,
         )
         pygame.draw.line(
             self.surf,
-            (0, 255, 255), # color
+            (255, 255, 0), # color
             (int(self.goal[0]), int(self.goal[1] - CROSSHAIR_LENGTH)), # start_pos
             (int(self.goal[0]), int(self.goal[1] + CROSSHAIR_LENGTH)), # end_pos
+            width=10,
         )
 
         # Draw sensor output

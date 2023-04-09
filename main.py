@@ -15,6 +15,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Train a Roomba model.")
     parser.add_argument('--episodes', type=int, default=300000, required=False)
     parser.add_argument('--model', type=str, default="ppo")
+    parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--eval-only', action="store_true", default=False)
     parser.add_argument('--train-only', action="store_true", default=False)
     return parser.parse_args()
@@ -31,7 +32,8 @@ if __name__ == '__main__':
     model_architecture = args.model.upper()
     output_file = './{}-a-to-b'.format(model_architecture) #.format(args.gamma, args.episodes, args.C, args.replay_memory_size)
     if not args.eval_only:
-        model = create_model(model_architecture, env)
+        # model = create_model(model_architecture, env, gamma=0.95, gae_lambda=.5)
+        model = create_model(model_architecture, env, buffer_size=100000)
         model.learn(args.episodes)
         model.save(output_file)
     if not args.train_only:
