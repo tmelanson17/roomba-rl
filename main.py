@@ -8,40 +8,47 @@ from roomba_env import RoombaEnvAToB
 from model_utils import create_model, load_model
 
 from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.vec_env import SubprocVecEnv
 from huggingface_sb3 import package_to_hub
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Train a Roomba model.")
     parser.add_argument('--episodes', type=int, default=300000, required=False)
+    parser.add_argument('--max-episode-steps', type=int, default=200, required=False)
     parser.add_argument('--model', type=str, default="ppo")
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--eval-only', action="store_true", default=False)
     parser.add_argument('--train-only', action="store_true", default=False)
+    parser.add_argument('--preloaded-model', type=str, default=None, required=False)
     return parser.parse_args()
 
 
 if __name__ == '__main__':
-    def create_roomba_env(max_episode_steps=1000):
-        return RoombaEnvAToB(render_mode="rgb_array", max_episode_steps=max_episode_steps)
+    args = parse_args()
+    def create_roomba_env():
+        return RoombaEnvAToB(render_mode="rgb_array", max_episode_steps=args.max_episode_steps)
     
     env = make_vec_env(create_roomba_env, n_envs=4)
-    env_id = "RoombaAToB"
+    env_id = "RoombaAToB-Hardcoded"
     n_actions = env.action_space.n
-    args = parse_args()
     model_architecture = args.model.upper()
-    output_file = './{}-a-to-b'.format(model_architecture) #.format(args.gamma, args.episodes, args.C, args.replay_memory_size)
+    output_file = '{}-hardcoded'.format(model_architecture) #.format(args.gamma, args.episodes, args.C, args.replay_memory_size)
     if not args.eval_only:
-        # model = create_model(model_architecture, env, gamma=0.95, gae_lambda=.5)
-        model = create_model(model_architecture, env, buffer_size=100000)
+        if args.preloaded_model is not None:
+            model = load_model(model_architecture, args.preloaded_model, env)
+        else:
+            model = create_model(model_architecture, env, gamma=args.gamma, gae_lambda=.5)
+            #model = create_model(model_architecture, env, exploration_final_eps=0.1, exploration_fraction=0.7, buffer_size=100000)
         model.learn(args.episodes)
         model.save(output_file)
     if not args.train_only:
-        model = load_model(model_architecture, output_file)
-        model_name = f"{model_architecture}-default"
+        if args.eval_only:
+            model = load_model(model_architecture, output_file)
+        model_name = output_file
         # TODO: replace culteejen with username
         repo_id = f"culteejen/{model_name}-{env_id}"
-        eval_env = make_vec_env(create_roomba_env, n_envs=1)
+        eval_env = SubprocVecEnv([create_roomba_env])
         package_to_hub(
                model=model, # Our trained model
                model_name=model_name, # The name of our trained model

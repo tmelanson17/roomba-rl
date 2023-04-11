@@ -3,7 +3,7 @@ from gym.error import DependencyNotInstalled
 from gym import spaces
 import numpy as np
 from roomba import *
-from particle import Pose, ParticleMap
+from particle import Pose, ParticleMap, ParticleHardcodedMap
 from sensor import Sensor
 import math
 from angle_math import compute_angle_diff
@@ -26,7 +26,7 @@ P_SCALE = 10.0
 VIEWPORT_W = 600
 VIEWPORT_H = 400
 
-LINEAR_SPEED=15
+LINEAR_SPEED=50
 ROTATIONAL_SPEED=1.0
 
 N_PARTICLES=100
@@ -34,7 +34,7 @@ PARTICLE_SPEED=1
 
 SENSOR_DETECTION_THRESHOLD=100
 
-COLLISION_DIST=15
+COLLISION_DIST=10
 
 @dataclass
 class RoombaEnvConfig():
@@ -217,6 +217,15 @@ class RoombaEnv(gym.Env):
                 np.array(pygame.surfarray.pixels3d(self.surf)), axes=(1, 0, 2)
             )
 
+HARDCODED_MAP = ParticleHardcodedMap(
+    pygame.surfarray.array_red(
+        pygame.image.load("canvas.png")
+    ),
+    VIEWPORT_W,
+    VIEWPORT_H, 
+    max_dist=0,
+    collision_dist=COLLISION_DIST,
+)
 
 class RoombaEnvAToB(gym.Env):
     metadata = {
@@ -228,15 +237,19 @@ class RoombaEnvAToB(gym.Env):
         self._rnd = random.Random()
         # Hardcode the goal
         self.goal = (
-                3*self.config.viewport_width/4,
+                2*self.config.viewport_width/5,
                 3*self.config.viewport_height/4,
         )
-        # self.goal = (
-        #         self._rnd.random()*self.config.viewport_width, 
-        #         self._rnd.random()*self.config.viewport_height, 
-        # )
-        roomba_start_x = self.config.viewport_width // 2
-        roomba_start_y = self.config.viewport_height // 2
+        self.goal = (
+                541,
+                180,
+        )
+        #self.goal = (
+        #        self._rnd.random()*self.config.viewport_width, 
+        #        self._rnd.random()*self.config.viewport_height, 
+        #)
+        roomba_start_x = self.config.viewport_width // 2 - 20
+        roomba_start_y = self.config.viewport_height // 2 - 20
         self._roomba = Roomba(
             pos=Pose(
                 x=roomba_start_x,
@@ -253,14 +266,17 @@ class RoombaEnvAToB(gym.Env):
             (roomba_start_x - roomba_buffer, roomba_start_y - roomba_buffer),
             (roomba_start_x + roomba_buffer, roomba_start_y + roomba_buffer),
         )
-        self._particles = ParticleMap(
-            self.config.n_particles,
-            self.config.viewport_width,
-            self.config.viewport_height, 
-            free_space=free_space,
-            max_dist=self.config.particle_speed,
-            collision_dist=self.config.collision_dist
-        )
+
+        self._particles = HARDCODED_MAP
+        # Step 1: no particles
+        #self._particles = ParticleMap(
+        #    0, # self.config.n_particles,
+        #    self.config.viewport_width,
+        #    self.config.viewport_height, 
+        #    free_space=free_space,
+        #    max_dist=self.config.particle_speed,
+        #    collision_dist=self.config.collision_dist
+        #)
         self._sensor = Sensor(SENSOR_DETECTION_THRESHOLD)
         self._i = 0
         self._bounds = (VIEWPORT_W, VIEWPORT_H)
@@ -283,7 +299,7 @@ class RoombaEnvAToB(gym.Env):
         high = np.array(high, dtype=np.float32)
         self.observation_space = spaces.Box(low, high)
         self._init_states()
-        self._max_episode_steps = 200
+        self._max_episode_steps = max_episode_steps
         self.render_mode = render_mode
         self.screen: pygame.Surface = None
         self.clock = None
@@ -307,15 +323,15 @@ class RoombaEnvAToB(gym.Env):
         return np.array(obs, dtype=np.float32)
 
     def calculate_reward(self, obs):
-        d_theta = obs[1]
+        d_theta = abs(obs[1])
         # TODO: Make this a parameter
         OPPOSITE_THRESHOLD = math.pi/2
-        CLOSE_THRESHOLD = math.pi/8
+        CLOSE_THRESHOLD = math.pi/16
         # Three-tier : -1 if opposite direction, 1 if very close
         if d_theta > OPPOSITE_THRESHOLD:
-            theta_reward = -2
+            theta_reward = -1
         elif d_theta < CLOSE_THRESHOLD:
-            theta_reward = 1
+            theta_reward = 5
         else:
             theta_reward = 0
         distance = obs[0]
@@ -323,10 +339,10 @@ class RoombaEnvAToB(gym.Env):
         # You reached the goal!
         if distance < self.config.collision_dist:
             self.terminated = True
-            return 100
+            return 1000
         return (
-                theta_reward +
-                (last_distance - distance)
+                0.0*theta_reward +
+                0.1*(last_distance - distance)
                 - self.config.fuel_cost
         )
 
@@ -340,12 +356,15 @@ class RoombaEnvAToB(gym.Env):
             self.terminated = True
         obs = self.measure()
         reward = self.calculate_reward(obs)
+        # Punish moving backwards
+        if action != 0:
+            reward -= 1
         # print(f"Reward: {reward}")
         # You hit the particle :(
         self._i += 1
         self._last_obs = obs
         if self._particles.detect_collision(self._roomba.pose):
-            reward = -200
+            reward = -500
             self.terminated = True
             obs = None
         return obs, reward, self.terminated, {}
@@ -453,24 +472,24 @@ if __name__ == '__main__':
     # Stress test
     N_PARTICLES=1000
     SPEED=5
-    env = RoombaEnv(render_mode="rgb_array")
-    video_recorder = VideoRecorder(env, enabled=True, path='random_actions.mp4')
-    for i in range(100):
-        video_recorder.capture_frame()
-        state, reward, terminated, _ = env.step(env.action_space.sample())
-        print(state)
-        print(reward)
-        print("===========")
-        if terminated:
-            break
-    print(video_recorder.path)
-    video_recorder.close()
+   # env = RoombaEnv(render_mode="rgb_array")
+   # video_recorder = VideoRecorder(env, enabled=True, path='random_actions.mp4')
+   # for i in range(100):
+   #     video_recorder.capture_frame()
+   #     state, reward, terminated, _ = env.step(env.action_space.sample())
+   #     print(state)
+   #     print(reward)
+   #     print("===========")
+   #     if terminated:
+   #         break
+   # print(video_recorder.path)
+   # video_recorder.close()
 
     # Test the new env
     env_a_to_b = RoombaEnvAToB(render_mode="rgb_array")
     video_recorder_a_to_b = VideoRecorder(env_a_to_b, enabled=True, path='a_to_b.mp4')
     for i in range(4):
-        for j in range(25):
+        for j in range(100):
             video_recorder_a_to_b.capture_frame()
             state, reward, terminated, _ = env_a_to_b.step(i)
             print(state)

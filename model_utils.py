@@ -6,10 +6,10 @@ def create_model(model_type, env, **args):
     elif model_type == "DQN":
         return DQN(policy='MlpPolicy', env=env, verbose=True, **args)
 
-def load_model(model_type, model_filename):
+def load_model(model_type, model_filename, env=None):
     if model_type == "PPO":
-        return PPO.load(model_filename)
+        return PPO.load(model_filename, env)
     elif model_type == "DQN":
-        return DQN.load(model_filename)
+        return DQN.load(model_filename, env)
     else:
         raise ValueError("model type unknown")
