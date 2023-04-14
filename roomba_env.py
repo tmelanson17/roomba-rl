@@ -36,6 +36,8 @@ SENSOR_DETECTION_THRESHOLD=100
 
 COLLISION_DIST=10
 
+SENSOR_ANGLES = [i*math.pi/4 for i in range(8)]
+
 @dataclass
 class RoombaEnvConfig():
     n_particles: int = N_PARTICLES
@@ -86,7 +88,7 @@ class RoombaEnv(gym.Env):
             max_dist=config.particle_speed,
             collision_dist=config.collision_dist
         )
-        self._sensor = Sensor(SENSOR_DETECTION_THRESHOLD)
+        self._sensor = Sensor(SENSOR_DETECTION_THRESHOLD, SENSOR_ANGLES)
         self._i = 0
         self._bounds = (VIEWPORT_W, VIEWPORT_H)
 
@@ -180,7 +182,7 @@ class RoombaEnv(gym.Env):
 
         # Draw sensor output
         sensor_output = self._sensor.sense(self._roomba, self._particles)
-        for sensor_level, angle_sensor in zip(sensor_output, self._sensor.angles):
+        for sensor_level, angle_sensor in zip(sensor_output, self._sensor._angles):
             angle_global = angle_sensor + roomba_pose.theta
             sensor_raw_dist = sensor_level * self._sensor.detection_threshold
             pygame.draw.line(
@@ -277,7 +279,7 @@ class RoombaEnvAToB(gym.Env):
         #    max_dist=self.config.particle_speed,
         #    collision_dist=self.config.collision_dist
         #)
-        self._sensor = Sensor(SENSOR_DETECTION_THRESHOLD)
+        self._sensor = Sensor(SENSOR_DETECTION_THRESHOLD, SENSOR_ANGLES)
         self._i = 0
         self._bounds = (VIEWPORT_W, VIEWPORT_H)
         self._last_obs = self.measure()
@@ -429,7 +431,7 @@ class RoombaEnvAToB(gym.Env):
 
         # Draw sensor output
         sensor_output = self._sensor.sense(self._roomba, self._particles)
-        for sensor_level, angle_sensor in zip(sensor_output, self._sensor.angles):
+        for sensor_level, angle_sensor in zip(sensor_output, self._sensor._angles):
             angle_global = angle_sensor + roomba_pose.theta
             sensor_raw_dist = sensor_level * self._sensor.detection_threshold
             pygame.draw.line(
