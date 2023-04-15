@@ -4,7 +4,7 @@ import numpy as np
 import copy
 import argparse
 import sys
-from roomba_env import RoombaEnvAToB
+from roomba_env import RoombaEnvAToB, RoombaEnvConfig
 from model_utils import create_model, load_model
 
 from stable_baselines3.common.env_util import make_vec_env
@@ -21,19 +21,33 @@ def parse_args():
     parser.add_argument('--eval-only', action="store_true", default=False)
     parser.add_argument('--train-only', action="store_true", default=False)
     parser.add_argument('--preloaded-model', type=str, default=None, required=False)
+    parser.add_argument('--output-tag', type=str, required=False, default="default")
+
+    # Roomba env arguments
+    parser.add_argument('--n-particles', type=int, default=100, required=False)
+    parser.add_argument('--hardcode-map', action="store_true", required=False)
+    parser.add_argument('--goal', type=int, nargs="+", required=False, default=None)
+    parser.add_argument('--roomba-speed', type=int, default=None)
     return parser.parse_args()
 
 
 if __name__ == '__main__':
     args = parse_args()
     def create_roomba_env():
-        return RoombaEnvAToB(render_mode="rgb_array", max_episode_steps=args.max_episode_steps)
+        roomba_env_config = RoombaEnvConfig()
+        roomba_env_config.n_particles = args.n_particles
+        roomba_env_config.hardcode_particle_map = args.hardcode_map
+        if args.roomba_speed is not None:
+            roomba_env_config.linear_speed *= args.roomba_speed
+            roomba_env_config.rotational_speed *= args.roomba_speed
+        roomba_env_config.goal = None if args.goal is None else tuple(args.goal)
+        return RoombaEnvAToB(roomba_env_config=roomba_env_config, render_mode="rgb_array", max_episode_steps=args.max_episode_steps)
     
     env = make_vec_env(create_roomba_env, n_envs=4)
-    env_id = "RoombaAToB-Hardcoded"
     n_actions = env.action_space.n
     model_architecture = args.model.upper()
-    output_file = '{}-hardcoded'.format(model_architecture) #.format(args.gamma, args.episodes, args.C, args.replay_memory_size)
+    output_file = '{}-{}'.format(model_architecture, args.output_tag) #.format(args.gamma, args.episodes, args.C, args.replay_memory_size)
+    env_id = "RoombaAToB-{}".format(args.output_tag)
     if not args.eval_only:
         if args.preloaded_model is not None:
             model = load_model(model_architecture, args.preloaded_model, env)

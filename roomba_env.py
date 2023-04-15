@@ -36,17 +36,24 @@ SENSOR_DETECTION_THRESHOLD=100
 
 COLLISION_DIST=10
 
-SENSOR_ANGLES = [i*math.pi/4 for i in range(8)]
+N_SENSORS=8
+
+SENSOR_ANGLES = [i*math.pi/4 for i in range(N_SENSORS)]
 
 @dataclass
 class RoombaEnvConfig():
     n_particles: int = N_PARTICLES
+    hardcode_particle_map: bool = False
+    goal: tuple = None
     particle_speed: int = PARTICLE_SPEED
+    linear_speed: int = LINEAR_SPEED
+    rotational_speed: int = ROTATIONAL_SPEED
     viewport_width: int = VIEWPORT_W
     viewport_height: int = VIEWPORT_H
     sensor_detection_threshold: int = SENSOR_DETECTION_THRESHOLD
     collision_dist: int = COLLISION_DIST
-    fuel_cost: float = 0.01
+    fuel_cost: float = 0.1
+    wraparound: bool = False
 
 def rotate(dp,theta):
     dx, dy = dp
@@ -73,19 +80,14 @@ class RoombaEnvAToB(gym.Env):
 
     def _init_states(self, seed=0):
         self._rnd = random.Random()
+        if self.config.goal is None:
+            self.goal = (
+                    self._rnd.random()*self.config.viewport_width, 
+                    self._rnd.random()*self.config.viewport_height, 
+            )
         # Hardcode the goal
-        self.goal = (
-                2*self.config.viewport_width/5,
-                3*self.config.viewport_height/4,
-        )
-        self.goal = (
-                541,
-                180,
-        )
-        #self.goal = (
-        #        self._rnd.random()*self.config.viewport_width, 
-        #        self._rnd.random()*self.config.viewport_height, 
-        #)
+        else:
+            self.goal = self.config.goal
         roomba_start_x = self.config.viewport_width // 2 - 20
         roomba_start_y = self.config.viewport_height // 2 - 20
         self._roomba = Roomba(
@@ -94,8 +96,9 @@ class RoombaEnvAToB(gym.Env):
                 y=roomba_start_y,
                 theta=0.
             ), 
-            dx=LINEAR_SPEED/FPS,
-            dtheta=ROTATIONAL_SPEED/FPS
+            dx=self.config.linear_speed/FPS,
+            dtheta=self.config.rotational_speed/FPS,
+            use_wraparound=self.config.wraparound
         )
         self.terminated = False
         # TODO: Make this a config param
@@ -105,16 +108,17 @@ class RoombaEnvAToB(gym.Env):
             (roomba_start_x + roomba_buffer, roomba_start_y + roomba_buffer),
         )
 
-        self._particles = HARDCODED_MAP
-        # Step 1: no particles
-        #self._particles = ParticleMap(
-        #    0, # self.config.n_particles,
-        #    self.config.viewport_width,
-        #    self.config.viewport_height, 
-        #    free_space=free_space,
-        #    max_dist=self.config.particle_speed,
-        #    collision_dist=self.config.collision_dist
-        #)
+        if self.config.hardcode_particle_map:
+            self._particles = HARDCODED_MAP
+        else:
+            self._particles = ParticleMap(
+                self.config.n_particles,
+                self.config.viewport_width,
+                self.config.viewport_height, 
+                free_space=free_space,
+                max_dist=self.config.particle_speed,
+                collision_dist=self.config.collision_dist
+            )
         self._sensor = Sensor(SENSOR_DETECTION_THRESHOLD, SENSOR_ANGLES)
         self._i = 0
         self._bounds = (VIEWPORT_W, VIEWPORT_H)
@@ -130,9 +134,9 @@ class RoombaEnvAToB(gym.Env):
         # Observation space: (x, y, theta,) of goal
         low = [0, 0]
         high = [self.config.viewport_width**2+self.config.viewport_height**2, math.pi]
-        # Observation space: (s1, s2, s3) of sensor output
-        low += [0.0, 0.0, 0.0]
-        high += [100.0, 100.0, 100.0]
+        # Observation space: (s1-s8) of sensor output
+        low += [0.0 for i in range(N_SENSORS)]
+        high += [100.0 for i in range(N_SENSORS)]
         low = np.array(low, dtype=np.float32)
         high = np.array(high, dtype=np.float32)
         self.observation_space = spaces.Box(low, high)
@@ -166,10 +170,11 @@ class RoombaEnvAToB(gym.Env):
         OPPOSITE_THRESHOLD = math.pi/2
         CLOSE_THRESHOLD = math.pi/16
         # Three-tier : -1 if opposite direction, 1 if very close
+        THETA_WEIGHT = 1 if self._particles.n_particles == 0 else 0.01
         if d_theta > OPPOSITE_THRESHOLD:
-            theta_reward = -1
+            theta_reward = -THETA_WEIGHT
         elif d_theta < CLOSE_THRESHOLD:
-            theta_reward = 5
+            theta_reward = 2*THETA_WEIGHT
         else:
             theta_reward = 0
         distance = obs[0]
@@ -178,8 +183,14 @@ class RoombaEnvAToB(gym.Env):
         if distance < self.config.collision_dist:
             self.terminated = True
             return 1000
+        # Punish going out of bounds
+        x,y,theta = self._roomba.pose 
+        if x > self.config.viewport_width or y > self.config.viewport_height or \
+                x < 0 or y < 0:
+            self.terminated = True
+            return -1
         return (
-                0.0*theta_reward +
+                theta_reward +
                 0.1*(last_distance - distance)
                 - self.config.fuel_cost
         )
@@ -194,13 +205,13 @@ class RoombaEnvAToB(gym.Env):
             self.terminated = True
         obs = self.measure()
         reward = self.calculate_reward(obs)
-        # Punish moving backwards
-        if action != 0:
-            reward -= 1
         # print(f"Reward: {reward}")
-        # You hit the particle :(
+        # punish moving backwards
+        if action == 2:
+            reward -= 1
         self._i += 1
         self._last_obs = obs
+        # You hit the particle :(
         if self._particles.detect_collision(self._roomba.pose):
             reward = -500
             self.terminated = True
@@ -305,6 +316,37 @@ class RoombaEnvAToB(gym.Env):
             )
 
 
+def get_human_feedback():
+    keypress=-1
+    while keypress < 0:
+        events = pygame.event.get()
+        for event in events:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_LEFT:
+                    print('LEFT')
+                    keypress= 3
+                if event.key == pygame.K_RIGHT:
+                    print('RIGHT')
+                    keypress= 1
+                if event.key == pygame.K_UP:
+                    print('FWD')
+                    keypress= 0
+                if event.key == pygame.K_DOWN:
+                    print('REV')
+                    keypress= 2
+    return keypress
+
+
+def human_control_loop(env):
+    # Get human feedback
+    action = get_human_feedback()
+    # Use action to step
+    obs, reward, terminated, _ = env.step(action)
+    # Render environment
+    env.render()
+    # TODO: Record
+
+
 if __name__ == '__main__':
     from gym.wrappers.monitoring.video_recorder import VideoRecorder
     # Stress test
@@ -325,4 +367,10 @@ if __name__ == '__main__':
             break
     print(video_recorder_a_to_b.path)
     video_recorder_a_to_b.close()
+
+    # Human feedback test
+    env = RoombaEnvAToB(render_mode="human")
+    env.render()
+    while not env.terminated:
+        human_control_loop(env)
 

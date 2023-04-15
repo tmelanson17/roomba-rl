@@ -10,8 +10,9 @@ class Pose(NamedTuple):
 
             
 class BaseParticle():
-    def __init__(self, initial_pos: Pose):
+    def __init__(self, initial_pos: Pose, wraparound: bool=True):
         self.pose = initial_pos
+        self.use_wraparound = wraparound
 
     def _move_distance(self, dist, dtheta):
         prev_pos = self.pose
@@ -24,6 +25,8 @@ class BaseParticle():
         return self.pose
 
     def wraparound(self, bounds):
+        if not self.use_wraparound:
+            return
         if len(bounds) != 2:
             # TODO : specific error type for bad args?
             raise Exception("Error: Define bounds as (xmax, ymax) or ((xmin, ymin), (xmax, ymax))")
@@ -120,6 +123,10 @@ class ParticleMap():
     @property
     def particles(self):
         return [p.pose for p in self._particles]
+
+    @property
+    def n_particles(self):
+        return len(self._particles)
 
 
 class ParticleHardcodedMap(ParticleMap):

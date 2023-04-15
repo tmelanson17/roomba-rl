@@ -1,5 +1,6 @@
 
 import math
+from angle_math import compute_angle_diff
 
 class Sensor:
     # TODO: Get rid of these magick numbers
@@ -18,7 +19,7 @@ class Sensor:
         for angle, distance in readings:
             for i, sensor_angle in enumerate(self._angles):
                 if abs(
-                    angle - (theta + sensor_angle)
+                     compute_angle_diff(angle, (theta + sensor_angle)%(2*math.pi))
                 ) < self._tol and distance < min_sensor_distances[i]:
                     min_sensor_distances[i] = distance
         return tuple(
