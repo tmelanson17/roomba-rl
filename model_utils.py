@@ -1,4 +1,6 @@
 from stable_baselines3 import PPO, DQN
+from imitation.algorithms import bc
+
 
 def create_model(model_type, env, **args):
     if model_type == "PPO":
@@ -11,5 +13,7 @@ def load_model(model_type, model_filename, env=None):
         return PPO.load(model_filename, env)
     elif model_type == "DQN":
         return DQN.load(model_filename, env)
+    elif model_type == "BC":
+        return bc.reconstruct_policy(model_filename)
     else:
         raise ValueError("model type unknown")

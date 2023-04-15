@@ -11,7 +11,6 @@ import random
 from dataclasses import dataclass
 
 
-
 try:
     import pygame
     from pygame import gfxdraw
@@ -198,7 +197,7 @@ class RoombaEnvAToB(gym.Env):
     def step(self, action):
         # Reward is based on distance
         if self.terminated:
-            return None, 0, self.terminated, {}
+            return obs, 0, self.terminated, {}
         self._roomba.move(action, self._bounds)
         self._particles.move()
         if self._i >= self._max_episode_steps:
@@ -215,7 +214,6 @@ class RoombaEnvAToB(gym.Env):
         if self._particles.detect_collision(self._roomba.pose):
             reward = -500
             self.terminated = True
-            obs = None
         return obs, reward, self.terminated, {}
 
     def reset(self, seed=0):
@@ -316,35 +314,7 @@ class RoombaEnvAToB(gym.Env):
             )
 
 
-def get_human_feedback():
-    keypress=-1
-    while keypress < 0:
-        events = pygame.event.get()
-        for event in events:
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_LEFT:
-                    print('LEFT')
-                    keypress= 3
-                if event.key == pygame.K_RIGHT:
-                    print('RIGHT')
-                    keypress= 1
-                if event.key == pygame.K_UP:
-                    print('FWD')
-                    keypress= 0
-                if event.key == pygame.K_DOWN:
-                    print('REV')
-                    keypress= 2
-    return keypress
 
-
-def human_control_loop(env):
-    # Get human feedback
-    action = get_human_feedback()
-    # Use action to step
-    obs, reward, terminated, _ = env.step(action)
-    # Render environment
-    env.render()
-    # TODO: Record
 
 
 if __name__ == '__main__':
@@ -367,10 +337,4 @@ if __name__ == '__main__':
             break
     print(video_recorder_a_to_b.path)
     video_recorder_a_to_b.close()
-
-    # Human feedback test
-    env = RoombaEnvAToB(render_mode="human")
-    env.render()
-    while not env.terminated:
-        human_control_loop(env)
 

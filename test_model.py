@@ -15,12 +15,25 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Test the Lunar Lander model.")
     parser.add_argument('--filename', type=str, help="Saved model", required=True)
     parser.add_argument('--model', type=str, help="model type", default='ppo')
+
+    # Roomba env arguments
+    parser.add_argument('--n-particles', type=int, default=100, required=False)
+    parser.add_argument('--hardcode-map', action="store_true", required=False)
+    parser.add_argument('--goal', type=int, nargs="+", required=False, default=None)
+    parser.add_argument('--roomba-speed', type=int, default=None)
     return parser.parse_args()
 
 
 if __name__ == '__main__':
-    def create_roomba_env(max_episode_steps=1000):
-        return RoombaEnvAToB(render_mode="rgb_array", max_episode_steps=max_episode_steps)
+    def create_roomba_env():
+        roomba_env_config = RoombaEnvConfig()
+        roomba_env_config.n_particles = args.n_particles
+        roomba_env_config.hardcode_particle_map = args.hardcode_map
+        if args.roomba_speed is not None:
+            roomba_env_config.linear_speed *= args.roomba_speed
+            roomba_env_config.rotational_speed *= args.roomba_speed
+        roomba_env_config.goal = None if args.goal is None else tuple(args.goal)
+        return RoombaEnvAToB(roomba_env_config=roomba_env_config, render_mode="rgb_array", max_episode_steps=args.max_episode_steps)
     args = parse_args()
     vec_env = make_vec_env(create_roomba_env, n_envs=1)
     directory= pathlib.Path("test_results/")
