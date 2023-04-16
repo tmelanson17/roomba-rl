@@ -5,6 +5,7 @@ import pathlib
 from gym.wrappers.monitoring.video_recorder import VideoRecorder
 from model_utils import load_model
 from roomba_env import RoombaEnvAToB
+from create_roomba_env import add_roomba_args, RoombaEnvFactory
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import (
       VecEnv,
@@ -15,14 +16,15 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Test the Lunar Lander model.")
     parser.add_argument('--filename', type=str, help="Saved model", required=True)
     parser.add_argument('--model', type=str, help="model type", default='ppo')
+
+    add_roomba_args(parser)
     return parser.parse_args()
 
 
 if __name__ == '__main__':
-    def create_roomba_env(max_episode_steps=1000):
-        return RoombaEnvAToB(render_mode="rgb_array", max_episode_steps=max_episode_steps)
     args = parse_args()
-    vec_env = make_vec_env(create_roomba_env, n_envs=1)
+    factory = RoombaEnvFactory(args)
+    vec_env = make_vec_env(factory.create_roomba_env_func(), n_envs=1)
     directory= pathlib.Path("test_results/")
     directory.mkdir(exist_ok=True)
     n_actions = vec_env.action_space.n

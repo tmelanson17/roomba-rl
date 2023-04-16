@@ -1,6 +1,7 @@
 from typing import NamedTuple
 import random
 import math
+import numpy as np
 
 class Pose(NamedTuple):
     x: float
@@ -9,8 +10,9 @@ class Pose(NamedTuple):
 
             
 class BaseParticle():
-    def __init__(self, initial_pos: Pose):
+    def __init__(self, initial_pos: Pose, wraparound: bool=True):
         self.pose = initial_pos
+        self.use_wraparound = wraparound
 
     def _move_distance(self, dist, dtheta):
         prev_pos = self.pose
@@ -18,11 +20,13 @@ class BaseParticle():
         self.pose = Pose(
             x=prev_pos.x + dist * math.cos(theta),
             y=prev_pos.y + dist * math.sin(theta),
-            theta=(theta + dtheta) % (2 * math.pi)
+            theta=(theta + dtheta + math.pi) % (2 * math.pi) - math.pi,
         )
         return self.pose
 
     def wraparound(self, bounds):
+        if not self.use_wraparound:
+            return
         if len(bounds) != 2:
             # TODO : specific error type for bad args?
             raise Exception("Error: Define bounds as (xmax, ymax) or ((xmin, ymin), (xmax, ymax))")
@@ -75,7 +79,7 @@ def is_in_free_space(pose, free_space):
         pose.x >= minx and pose.x <= maxx and
         pose.y >= miny and pose.y <= maxy 
     )
-    
+
 
 class ParticleMap():
     def __init__(self, n_particles, x_bound, y_bound, free_space=None, max_dist=2, collision_dist=4):
@@ -106,6 +110,7 @@ class ParticleMap():
                 return True
         return False
 
+
     def get_readings(self, pose):
         readings = []
         for particle in self._particles:
@@ -118,6 +123,30 @@ class ParticleMap():
     @property
     def particles(self):
         return [p.pose for p in self._particles]
+
+    @property
+    def n_particles(self):
+        return len(self._particles)
+
+
+class ParticleHardcodedMap(ParticleMap):
+    '''
+        map_filename : file pointing to the image of the map, where darker lines are obstacles
+    '''
+    def __init__(self, img, x_bound, y_bound, max_dist=2, collision_dist=4):
+        self._particles = []
+        max_value = np.max(img)
+        # Check if particle is in each 10x10 pixel box
+        BOX_SIZE=10
+        for i in range(0, img.shape[0], BOX_SIZE):
+            for j in range(0, img.shape[1], BOX_SIZE):
+                if np.sum(img[i:i+BOX_SIZE,j:j+BOX_SIZE])/(max_value*BOX_SIZE**2) < 0.95:
+                    self._particles.append(
+                            RandomParticle(Pose(i,j,0), 0)
+                    )
+        self._collision_dist = collision_dist
+        self._bounds = (x_bound, y_bound)
+
 
 if __name__ == "__main__":
     p = RandomParticle(Pose(x=1, y=2, theta=0), speed=1)

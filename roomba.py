@@ -9,8 +9,8 @@ class Action(enum.Enum):
   RIGHT=3
 
 class Roomba(BaseParticle):
-    def __init__(self, pos: Pose, dx: float, dtheta: float) -> None:
-        super().__init__(pos)
+    def __init__(self, pos: Pose, dx: float, dtheta: float, use_wraparound: bool) -> None:
+        super().__init__(pos, use_wraparound)
         self._dx = dx
         self._dtheta = dtheta
 
