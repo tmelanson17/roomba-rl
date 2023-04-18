@@ -18,6 +18,7 @@ except ImportError:
     raise DependencyNotInstalled(
         "pygame is not installed, run `pip install gym[box2d]`"
     )
+
 FPS=10
 SCALE = 30.0  # affects how fast-paced the game is, forces should be adjusted as well
 P_SCALE = 10.0
@@ -43,6 +44,7 @@ SENSOR_ANGLES = [i*math.pi/4 for i in range(N_SENSORS)]
 class RoombaEnvConfig():
     n_particles: int = N_PARTICLES
     hardcode_particle_map: bool = False
+    visible_particles: bool = True
     goal: tuple = None
     particle_speed: int = PARTICLE_SPEED
     linear_speed: int = LINEAR_SPEED
@@ -290,17 +292,18 @@ class RoombaEnvAToB(gym.Env):
             )
 
         # Draw objects
-        for pos in self._particles.particles:
-            if pos.x < 0 or pos.y < 0:
-                continue
-            if pos.x > VIEWPORT_W or pos.y > VIEWPORT_H:
-                continue
-            pygame.draw.circle(
-                self.surf,
-                (255,0,0), # color
-                (int(pos.x), int(pos.y)), # center
-                2, # radius
-            )
+        if self.config.visible_particles:
+            for pos in self._particles.particles:
+                if pos.x < 0 or pos.y < 0:
+                    continue
+                if pos.x > VIEWPORT_W or pos.y > VIEWPORT_H:
+                    continue
+                pygame.draw.circle(
+                    self.surf,
+                    (255,0,0), # color
+                    (int(pos.x), int(pos.y)), # center
+                    2, # radius
+                )
         
         if render_mode == "human":
             assert self.screen is not None
