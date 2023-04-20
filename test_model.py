@@ -16,6 +16,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Test the Lunar Lander model.")
     parser.add_argument('--filename', type=str, help="Saved model", required=True)
     parser.add_argument('--model', type=str, help="model type", default='ppo')
+    parser.add_argument('--runs', type=int, default=10)
 
     add_roomba_args(parser)
     return parser.parse_args()
@@ -29,12 +30,11 @@ if __name__ == '__main__':
     directory.mkdir(exist_ok=True)
     n_actions = vec_env.action_space.n
     # TODO: Make a factory depending on model
-    model = load_model(args.model.upper(), args.filename)
+    model = load_model(args.model.upper(), args.filename,env=vec_env)
     avg_reward=0
 
     # test_model(model, env)
-    n_steps=10
-    for i_episode in range(n_steps):
+    for i_episode in range(args.runs):
         video_output_file = directory / f"test_{i_episode}.mp4"
         env = VecVideoRecorder(vec_env, str(video_output_file), lambda x: x==0)
         observation = env.reset()
@@ -71,5 +71,5 @@ if __name__ == '__main__':
         env.close()
         avg_reward += total_reward
         # video_recorder.close()
-    print(f"Average reward: {avg_reward/n_steps}")
+    print(f"Average reward: {avg_reward/args.runs}")
     # env.close()

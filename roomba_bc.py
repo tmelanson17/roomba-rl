@@ -3,7 +3,9 @@ from roomba_env import RoombaEnvAToB
 from imitation.algorithms import bc
 from imitation.data import rollout
 from stable_baselines3.common.evaluation import evaluate_policy
-from create_roomba_env import add_roomba_args, create_roomba_env
+from create_roomba_env import add_roomba_args, RoombaEnvFactory
+
+import argparse
 
 import numpy as np
 import pygame
@@ -52,15 +54,25 @@ def human_control_loop(env):
     return Trajectory(obs=observations, acts=actions, terminal=True, infos=None)
 
 
-record_data=True
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train a Roomba model.")
+    parser.add_argument('--episodes', type=int, default=50, required=False)
+    parser.add_argument('--record-data', action="store_true", default=False)
+    parser.add_argument('--train-epochs', type=int, default=20)
+    add_roomba_args(parser)
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    env = create_roomba_env(args)
+    args = parse_args()
+    factory = RoombaEnvFactory(args)
+    env = factory.create_roomba_env()
     import pickle
 
     # Writing
-    if record_data: 
+    if args.record_data: 
         trajectories = []
-        for i in range(10):
+        for i in range(args.episodes):
             trajectories.append(human_control_loop(env))
         fileObj = open('trajectories.obj', 'wb')
         pickle.dump(trajectories,fileObj)
@@ -77,7 +89,7 @@ if __name__ == "__main__":
         demonstrations=transitions,
         rng=np.random.default_rng(),
     )
-    bc_trainer.train(n_epochs=10)
-    reward, _ = evaluate_policy(bc_trainer.policy, env, 10)
+    bc_trainer.train(n_epochs=args.train_epochs)
+    reward, _ = evaluate_policy(bc_trainer.policy, env, 30)
     print(f"Reward: {reward}")
     bc_trainer.save_policy("ppo_bc_policy")

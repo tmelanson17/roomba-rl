@@ -8,6 +8,9 @@ def add_roomba_args(parser):
     parser.add_argument('--goal', type=int, nargs="+", required=False, default=None)
     parser.add_argument('--roomba-speed', type=int, default=None)
     parser.add_argument('--human', action="store_true", required=False)
+    parser.add_argument('--disable-visible-particles', action="store_true", required=False)
+    parser.add_argument('--max-episode-steps', type=int, default=200, required=False)
+    parser.add_argument('--fuel-cost', type=float, default=0.01, required=False)
 
 class RoombaEnvFactory:
     def __init__(self, args): 
@@ -17,14 +20,18 @@ class RoombaEnvFactory:
         if args.roomba_speed is not None:
             self.roomba_env_config.linear_speed *= args.roomba_speed
             self.roomba_env_config.rotational_speed *= args.roomba_speed
+        if args.disable_visible_particles:
+            self.roomba_env_config.visible_particles = False
         self.roomba_env_config.goal = None if args.goal is None else tuple(args.goal)
+        self.roomba_env_config.fuel_cost = args.fuel_cost
         self.render_mode = "human" if args.human else "rgb_array"
+        self.max_episode_steps = args.max_episode_steps
 
     def create_roomba_env(self):
-        return RoombaEnvAToB(roomba_env_config=roomba_env_config, render_mode=self.render_mode, max_episode_steps=args.max_episode_steps)
+        return RoombaEnvAToB(roomba_env_config=self.roomba_env_config, render_mode=self.render_mode, max_episode_steps=self.max_episode_steps)
 
     def create_roomba_env_func(self):
-        return partial(self.create_roomba_env, self)
+        return self.create_roomba_env
 
 
 if __name__ == "__main__":

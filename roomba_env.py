@@ -27,7 +27,7 @@ VIEWPORT_W = 600
 VIEWPORT_H = 400
 
 LINEAR_SPEED=50
-ROTATIONAL_SPEED=1.0
+ROTATIONAL_SPEED=0.5
 
 N_PARTICLES=100
 PARTICLE_SPEED=1
@@ -124,6 +124,7 @@ class RoombaEnvAToB(gym.Env):
         self._i = 0
         self._bounds = (VIEWPORT_W, VIEWPORT_H)
         self._last_obs = self.measure()
+        self._initial_distance = self._last_obs[0]
         return self._last_obs
         
     def __init__(self, roomba_env_config=None, render_mode="rgb_array", max_episode_steps=1000) -> None:
@@ -167,19 +168,22 @@ class RoombaEnvAToB(gym.Env):
 
     def calculate_reward(self, obs):
         d_theta = abs(obs[1])
+        distance = obs[0]
+        last_distance = self._last_obs[0]
         # TODO: Make this a parameter
         OPPOSITE_THRESHOLD = math.pi/2
-        CLOSE_THRESHOLD = math.pi/16
+        CLOSE_THRESHOLD = math.pi/8
         # Three-tier : -1 if opposite direction, 1 if very close
-        THETA_WEIGHT = 1 if self._particles.n_particles == 0 else 0.01
+        THETA_WEIGHT = 0 #1 if self._particles.n_particles == 0 else 0.01
+        DISTANCE_THRESHOLD = 100
+        DISTANCE_WEIGHT = 1 # DISTANCE_THRESHOLD / max(distance, 0.01)
+        SENSOR_MAX = 100
         if d_theta > OPPOSITE_THRESHOLD:
-            theta_reward = -THETA_WEIGHT
+            theta_reward = -5*THETA_WEIGHT
         elif d_theta < CLOSE_THRESHOLD:
             theta_reward = 2*THETA_WEIGHT
         else:
             theta_reward = 0
-        distance = obs[0]
-        last_distance = self._last_obs[0]
         # You reached the goal!
         if distance < self.config.collision_dist:
             self.terminated = True
@@ -189,10 +193,14 @@ class RoombaEnvAToB(gym.Env):
         if x > self.config.viewport_width or y > self.config.viewport_height or \
                 x < 0 or y < 0:
             self.terminated = True
-            return -1
+            return -500
+        # Maybe a front sensor punish?
+        sensor_mid_dist = obs[2]
+        sensor_punish = 0.01*(sensor_mid_dist - SENSOR_MAX)/SENSOR_MAX
         return (
-                theta_reward +
-                0.1*(last_distance - distance)
+                theta_reward + 
+                DISTANCE_WEIGHT*(last_distance-distance)+
+                sensor_punish
                 - self.config.fuel_cost
         )
 
@@ -202,20 +210,23 @@ class RoombaEnvAToB(gym.Env):
             return obs, 0, self.terminated, {}
         self._roomba.move(action, self._bounds)
         self._particles.move()
-        if self._i >= self._max_episode_steps:
-            self.terminated = True
         obs = self.measure()
         reward = self.calculate_reward(obs)
+        # TODO: consolidate rewards
+        if self._i >= self._max_episode_steps:
+            self.terminated = True
         # print(f"Reward: {reward}")
         # punish moving backwards
         if action == 2:
-            reward -= 1
+            reward -= 2
         self._i += 1
         self._last_obs = obs
         # You hit the particle :(
         if self._particles.detect_collision(self._roomba.pose):
             reward = -500
             self.terminated = True
+        if self.terminated:
+            reward += 1000*((self._initial_distance - obs[0])/self._initial_distance)**2
         return obs, reward, self.terminated, {}
 
     def reset(self, seed=0):

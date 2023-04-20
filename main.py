@@ -4,9 +4,9 @@ import numpy as np
 import copy
 import argparse
 import sys
-from roomba_env import RoombaEnvAToB, RoombaEnvFactory
+from roomba_env import RoombaEnvAToB
 from model_utils import create_model, load_model
-from create_roomba_env import add_roomba_args, 
+from create_roomba_env import add_roomba_args, RoombaEnvFactory
 
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
@@ -16,9 +16,14 @@ from huggingface_sb3 import package_to_hub
 def parse_args():
     parser = argparse.ArgumentParser(description="Train a Roomba model.")
     parser.add_argument('--episodes', type=int, default=300000, required=False)
-    parser.add_argument('--max-episode-steps', type=int, default=200, required=False)
     parser.add_argument('--model', type=str, default="ppo")
+
+    # PPO args
     parser.add_argument('--gamma', type=float, default=0.99)
+    parser.add_argument('--beta', type=float, default=0.0)
+    parser.add_argument('--epsilon', type=float, default=0.2)
+
+
     parser.add_argument('--eval-only', action="store_true", default=False)
     parser.add_argument('--train-only', action="store_true", default=False)
     parser.add_argument('--preloaded-model', type=str, default=None, required=False)
@@ -38,7 +43,7 @@ if __name__ == '__main__':
     env_id = "RoombaAToB-{}".format(args.output_tag)
     if not args.eval_only:
         if args.preloaded_model is not None:
-            model = load_model(model_architecture, args.preloaded_model, env)
+            model = load_model(model_architecture, args.preloaded_model, env, gamma=args.gamma, ent_coef=args.beta, clip_range=args.epsilon)
         else:
             model = create_model(model_architecture, env, gamma=args.gamma, gae_lambda=.5)
             #model = create_model(model_architecture, env, exploration_final_eps=0.1, exploration_fraction=0.7, buffer_size=100000)
@@ -50,7 +55,7 @@ if __name__ == '__main__':
         model_name = output_file
         # TODO: replace culteejen with username
         repo_id = f"culteejen/{model_name}-{env_id}"
-        eval_env = SubprocVecEnv([create_roomba_env])
+        eval_env = SubprocVecEnv([factory.create_roomba_env_func()])
         package_to_hub(
                model=model, # Our trained model
                model_name=model_name, # The name of our trained model
