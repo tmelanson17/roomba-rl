@@ -17,6 +17,7 @@ def parse_args():
     parser.add_argument('--filename', type=str, help="Saved model", required=True)
     parser.add_argument('--model', type=str, help="model type", default='ppo')
     parser.add_argument('--runs', type=int, default=10)
+    parser.add_argument('--policy', type=str, default="CnnPolicy")
 
     add_roomba_args(parser)
     return parser.parse_args()

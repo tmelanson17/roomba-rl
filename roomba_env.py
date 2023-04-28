@@ -20,7 +20,7 @@ except ImportError:
         "pygame is not installed, run `pip install gym[box2d]`"
     )
 
-FPS=10
+FPS=30
 SCALE = 30.0  # affects how fast-paced the game is, forces should be adjusted as well
 P_SCALE = 10.0
 
@@ -85,6 +85,8 @@ class RoombaEnvAToB(gym.Env):
 
     def _init_states(self, seed=0):
         self._rnd = random.Random()
+        self._surface_intialized=False
+        self._rendered_current=False
         if self.config.goal is None:
             self.goal = (
                     self._rnd.random()*self.config.viewport_width, 
@@ -239,6 +241,7 @@ class RoombaEnvAToB(gym.Env):
         return 0
 
     def step(self, action):
+        self._rendered_current = False
         # Reward is based on distance
         obs = self.measure()
         if self.terminated:
@@ -268,90 +271,93 @@ class RoombaEnvAToB(gym.Env):
     def reset(self, seed=0):
         return self._init_states(0)
 
+
     def render(self, mode=None):
         render_mode = mode if mode else self.render_mode
         # render_mode = self.render_mode
-        if self.screen is None and render_mode == "human":
+
+        if self.screen is None and mode == "human":
             pygame.init()
             pygame.display.init()
             self.screen = pygame.display.set_mode((VIEWPORT_W, VIEWPORT_H))
+
         if self.clock is None:
             self.clock = pygame.time.Clock()
 
-        self.surf = pygame.Surface((VIEWPORT_W, VIEWPORT_H))
+        if not self._rendered_current:
+            self.surf = pygame.Surface((VIEWPORT_W, VIEWPORT_H))
 
-        pygame.transform.scale(self.surf, (int(SCALE), int(SCALE)))
-
-        # Draw roomba
-        roomba_pose = self._roomba.pose
-        x = int(roomba_pose.x) 
-        y = int(roomba_pose.y) 
-        dps = [
-            (2, 0),
-            (6, 6),
-            (0, 8),
-            (-6, 6),
-            (-8, 0),
-            (-6, -6),
-            (0, -8),
-            (6, -6)
-        ]
-        rotated_dp = [rotate(p, roomba_pose.theta) for p in dps]
-        points = [
-            (int(x + p[0]), int(y + p[1])) for p in rotated_dp
-        ]
-        pygame.draw.polygon(
-            self.surf,
-            (255, 255, 255), # color
-            points # points
-        )
-
-        # Draw goal as crosshair
-        CROSSHAIR_LENGTH = 3
-        pygame.draw.line(
-            self.surf,
-            (255, 255, 0), # color
-            (int(self.goal[0] - CROSSHAIR_LENGTH), int(self.goal[1])), # start_pos
-            (int(self.goal[0] + CROSSHAIR_LENGTH), int(self.goal[1])), # end_pos
-            width=10,
-        )
-        pygame.draw.line(
-            self.surf,
-            (255, 255, 0), # color
-            (int(self.goal[0]), int(self.goal[1] - CROSSHAIR_LENGTH)), # start_pos
-            (int(self.goal[0]), int(self.goal[1] + CROSSHAIR_LENGTH)), # end_pos
-            width=10,
-        )
-
-        # Draw sensor output
-        sensor_output = self._sensor.sense(self._roomba, self._particles)
-        for sensor_level, angle_sensor in zip(sensor_output, self._sensor._angles):
-            angle_global = angle_sensor + roomba_pose.theta
-            sensor_raw_dist = sensor_level * self._sensor.detection_threshold
-            pygame.draw.line(
-                    self.surf,
-                    (0, 255, 255), # color
-                    (x, y), # start_pos
-                    (
-                        int(x + sensor_raw_dist*math.cos(angle_global)), 
-                        int(y + sensor_raw_dist*math.sin(angle_global)),
-                    ), # end_pos
+            # Draw roomba
+            roomba_pose = self._roomba.pose
+            x = int(roomba_pose.x) 
+            y = int(roomba_pose.y) 
+            dps = [
+                (2, 0),
+                (6, 6),
+                (0, 8),
+                (-6, 6),
+                (-8, 0),
+                (-6, -6),
+                (0, -8),
+                (6, -6)
+            ]
+            rotated_dp = [rotate(p, roomba_pose.theta) for p in dps]
+            points = [
+                (int(x + p[0]), int(y + p[1])) for p in rotated_dp
+            ]
+            pygame.draw.polygon(
+                self.surf,
+                (255, 255, 255), # color
+                points # points
             )
 
-        # Draw objects
-        if self.config.visible_particles:
-            for pos in self._particles.particles:
-                if pos.x < 0 or pos.y < 0:
-                    continue
-                if pos.x > VIEWPORT_W or pos.y > VIEWPORT_H:
-                    continue
-                pygame.draw.circle(
-                    self.surf,
-                    (255,0,0), # color
-                    (int(pos.x), int(pos.y)), # center
-                    2, # radius
+            # Draw goal as crosshair
+            CROSSHAIR_LENGTH = 3
+            pygame.draw.line(
+                self.surf,
+                (255, 255, 0), # color
+                (int(self.goal[0] - CROSSHAIR_LENGTH), int(self.goal[1])), # start_pos
+                (int(self.goal[0] + CROSSHAIR_LENGTH), int(self.goal[1])), # end_pos
+                width=10,
+            )
+            pygame.draw.line(
+                self.surf,
+                (255, 255, 0), # color
+                (int(self.goal[0]), int(self.goal[1] - CROSSHAIR_LENGTH)), # start_pos
+                (int(self.goal[0]), int(self.goal[1] + CROSSHAIR_LENGTH)), # end_pos
+                width=10,
+            )
+
+            # Draw sensor output
+            sensor_output = self._sensor.sense(self._roomba, self._particles)
+            for sensor_level, angle_sensor in zip(sensor_output, self._sensor._angles):
+                angle_global = angle_sensor + roomba_pose.theta
+                sensor_raw_dist = sensor_level * self._sensor.detection_threshold
+                pygame.draw.line(
+                        self.surf,
+                        (0, 255, 255), # color
+                        (x, y), # start_pos
+                        (
+                            int(x + sensor_raw_dist*math.cos(angle_global)), 
+                            int(y + sensor_raw_dist*math.sin(angle_global)),
+                        ), # end_pos
                 )
+
+            # Draw objects
+            if self.config.visible_particles:
+                for pos in self._particles.particles:
+                    if pos.x < 0 or pos.y < 0:
+                        continue
+                    if pos.x > VIEWPORT_W or pos.y > VIEWPORT_H:
+                        continue
+                    pygame.draw.circle(
+                        self.surf,
+                        (255,0,0), # color
+                        (int(pos.x), int(pos.y)), # center
+                        2, # radius
+                    )
         
+        self._rendered_current=True
         if render_mode == "human":
             assert self.screen is not None
             self.screen.blit(self.surf, (0, 0))
