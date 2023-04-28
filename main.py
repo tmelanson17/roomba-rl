@@ -28,6 +28,7 @@ def parse_args():
     parser.add_argument('--train-only', action="store_true", default=False)
     parser.add_argument('--preloaded-model', type=str, default=None, required=False)
     parser.add_argument('--output-tag', type=str, required=False, default="default")
+    parser.add_argument('--policy', type=str, required=False, default="MlpPolicy")
 
     add_roomba_args(parser)
     return parser.parse_args()
@@ -36,16 +37,20 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
     factory = RoombaEnvFactory(args)
-    env = make_vec_env(factory.create_roomba_env_func(), n_envs=4)
+    if args.policy == "MlpPolicy":
+        env = make_vec_env(factory.create_roomba_env_func(), n_envs=4)
+    else:
+        env = factory.create_roomba_env()
+    # env = factory.create_roomba_env_func()
     n_actions = env.action_space.n
     model_architecture = args.model.upper()
     output_file = '{}-{}'.format(model_architecture, args.output_tag) #.format(args.gamma, args.episodes, args.C, args.replay_memory_size)
     env_id = "RoombaAToB-{}".format(args.output_tag)
     if not args.eval_only:
         if args.preloaded_model is not None:
-            model = load_model(model_architecture, args.preloaded_model, env, gamma=args.gamma, ent_coef=args.beta, clip_range=args.epsilon)
+            model = load_model(model_architecture, args.preloaded_model, env, policy=args.policy, gamma=args.gamma, ent_coef=args.beta, clip_range=args.epsilon)
         else:
-            model = create_model(model_architecture, env, gamma=args.gamma, gae_lambda=.5)
+            model = create_model(model_architecture, env, policy=args.policy, gamma=args.gamma, gae_lambda=.5)
             #model = create_model(model_architecture, env, exploration_final_eps=0.1, exploration_fraction=0.7, buffer_size=100000)
         model.learn(args.episodes)
         model.save(output_file)

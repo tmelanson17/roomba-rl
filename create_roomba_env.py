@@ -1,5 +1,5 @@
 from functools import partial
-from roomba_env import RoombaEnvAToB, RoombaEnvConfig
+from roomba_env import RoombaEnvAToB, RoombaEnvConfig, SensorType
 
 def add_roomba_args(parser):
     # Roomba env arguments
@@ -17,6 +17,7 @@ class RoombaEnvFactory:
         self.roomba_env_config = RoombaEnvConfig()
         self.roomba_env_config.n_particles = args.n_particles
         self.roomba_env_config.hardcode_particle_map = args.hardcode_map
+        self.roomba_env_config.observation_space = SensorType.VISUAL if args.policy == "CnnPolicy" else SensorType.ULTRASONIC
         if args.roomba_speed is not None:
             self.roomba_env_config.linear_speed *= args.roomba_speed
             self.roomba_env_config.rotational_speed *= args.roomba_speed

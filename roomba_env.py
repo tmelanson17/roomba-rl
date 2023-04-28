@@ -9,6 +9,7 @@ import math
 from angle_math import compute_angle_diff
 import random
 from dataclasses import dataclass
+from enum import Enum
 
 
 try:
@@ -40,6 +41,8 @@ N_SENSORS=8
 
 SENSOR_ANGLES = [i*math.pi/4 for i in range(N_SENSORS)]
 
+SensorType = Enum('Sensor', ['ULTRASONIC', 'VISUAL'])
+
 @dataclass
 class RoombaEnvConfig():
     n_particles: int = N_PARTICLES
@@ -55,6 +58,7 @@ class RoombaEnvConfig():
     collision_dist: int = COLLISION_DIST
     fuel_cost: float = 0.1
     wraparound: bool = False
+    observation_space: SensorType = SensorType.ULTRASONIC
 
 def rotate(dp,theta):
     dx, dy = dp
@@ -133,23 +137,37 @@ class RoombaEnvAToB(gym.Env):
             roomba_env_config = RoombaEnvConfig()
         self.config = roomba_env_config
         self.action_space = spaces.Discrete(4)
-        # Observation space: (x, y, theta,) of goal
-        low = [0, 0]
-        high = [self.config.viewport_width**2+self.config.viewport_height**2, math.pi]
-        # Observation space: (s1-s8) of sensor output
-        low += [0.0 for i in range(N_SENSORS)]
-        high += [100.0 for i in range(N_SENSORS)]
-        low = np.array(low, dtype=np.float32)
-        high = np.array(high, dtype=np.float32)
-        self.observation_space = spaces.Box(low, high)
-        self._init_states()
+        if self.config.observation_space == SensorType.ULTRASONIC:
+            # Observation space: (x, y, theta,) of goal
+            low = [0, 0]
+            high = [self.config.viewport_width**2+self.config.viewport_height**2, math.pi]
+            # Observation space: (s1-s8) of sensor output
+            low += [0.0 for i in range(N_SENSORS)]
+            high += [100.0 for i in range(N_SENSORS)]
+            low = np.array(low, dtype=np.float32)
+            high = np.array(high, dtype=np.float32)
+            self.observation_space = spaces.Box(low, high)
+        elif self.config.observation_space == SensorType.VISUAL:
+            self.observation_space = spaces.Box(
+                    low=0, high=255, shape=(
+                        self.config.viewport_width, self.config.viewport_height, 3
+                    ), dtype=np.uint8
+            )
         self._max_episode_steps = max_episode_steps
         self.render_mode = render_mode
-        self.screen: pygame.Surface = None
+        self.screen = None
         self.clock = None
+        self._init_states()
 
     # TODO:Move to sensor
-    def measure(self):
+    def measure_ultrasonic(self):
+        if self.config.observation_space == SensorType.VISUAL:
+            raise Exception("Can't call this with visual observaton")
+        sensor_output = self._sensor.sense(self._roomba, self._particles)
+        sensor_output = tuple(s*100 for s in sensor_output)
+        return sensor_output
+
+    def measure_distance(self):
         roomba_x, roomba_y, roomba_theta = self._roomba.pose
         goal_x, goal_y = self.goal
         dx = goal_x - roomba_x
@@ -157,16 +175,22 @@ class RoombaEnvAToB(gym.Env):
         # Calculate angle of goal to roomba
 
         goal_theta = math.atan2(dy, dx)
-        sensor_output = self._sensor.sense(self._roomba, self._particles)
-        sensor_output = tuple(s*100 for s in sensor_output)
         diff = compute_angle_diff(goal_theta, roomba_theta)
-        obs = (
+        return (
                 math.sqrt((goal_x - roomba_x)**2 + (goal_y - roomba_y)**2),
                 diff, 
-        ) + sensor_output
-        return np.array(obs, dtype=np.float32)
+        ) 
 
-    def calculate_reward(self, obs):
+
+    def measure(self):
+        if self.config.observation_space == SensorType.VISUAL:
+            return self.render(mode="rgb_array").transpose((1,0,2))
+        else:
+            obs = self.measure_distance()
+            obs += self.measure_ultrasonic()
+            return np.array(obs, dtype=np.float32)
+
+    def calculate_reward_ultrasonic(self, obs):
         d_theta = abs(obs[1])
         distance = obs[0]
         last_distance = self._last_obs[0]
@@ -184,16 +208,6 @@ class RoombaEnvAToB(gym.Env):
             theta_reward = 2*THETA_WEIGHT
         else:
             theta_reward = 0
-        # You reached the goal!
-        if distance < self.config.collision_dist:
-            self.terminated = True
-            return 1000
-        # Punish going out of bounds
-        x,y,theta = self._roomba.pose 
-        if x > self.config.viewport_width or y > self.config.viewport_height or \
-                x < 0 or y < 0:
-            self.terminated = True
-            return -500
         # Maybe a front sensor punish?
         sensor_mid_dist = obs[2]
         sensor_punish = 0.01*(sensor_mid_dist - SENSOR_MAX)/SENSOR_MAX
@@ -204,14 +218,43 @@ class RoombaEnvAToB(gym.Env):
                 - self.config.fuel_cost
         )
 
+    def calculate_reward_general(self, distance):
+        # You reached the goal!
+        if distance < self.config.collision_dist:
+            self.terminated = True
+            return 1000
+        # Punish going out of bounds
+        x,y,theta = self._roomba.pose 
+        if x > self.config.viewport_width or y > self.config.viewport_height or \
+                x < 0 or y < 0:
+            self.terminated = True
+            return -500
+        # You hit the particle :(
+        if self._particles.detect_collision(self._roomba.pose):
+            reward = -500
+            self.terminated = True
+            return reward
+        if self.terminated:
+            return 1000*((self._initial_distance - distance)/self._initial_distance)**2
+        return 0
+
     def step(self, action):
         # Reward is based on distance
+        obs = self.measure()
         if self.terminated:
             return obs, 0, self.terminated, {}
         self._roomba.move(action, self._bounds)
         self._particles.move()
-        obs = self.measure()
-        reward = self.calculate_reward(obs)
+        distance=0
+        if self.config.observation_space == SensorType.ULTRASONIC:
+            reward = self.calculate_reward_ultrasonic(obs)
+            distance = obs[0]
+            self._last_obs = obs
+        elif self.config.observation_space == SensorType.VISUAL:
+            reward=0
+            dist_array=self.measure_distance()
+            distance = dist_array[0]
+        reward += self.calculate_reward_general(distance)
         # TODO: consolidate rewards
         if self._i >= self._max_episode_steps:
             self.terminated = True
@@ -220,21 +263,14 @@ class RoombaEnvAToB(gym.Env):
         if action == 2:
             reward -= 2
         self._i += 1
-        self._last_obs = obs
-        # You hit the particle :(
-        if self._particles.detect_collision(self._roomba.pose):
-            reward = -500
-            self.terminated = True
-        if self.terminated:
-            reward += 1000*((self._initial_distance - obs[0])/self._initial_distance)**2
         return obs, reward, self.terminated, {}
 
     def reset(self, seed=0):
         return self._init_states(0)
 
     def render(self, mode=None):
-        # render_mode = mode if mode else self.render_mode
-        render_mode = self.render_mode
+        render_mode = mode if mode else self.render_mode
+        # render_mode = self.render_mode
         if self.screen is None and render_mode == "human":
             pygame.init()
             pygame.display.init()
@@ -334,11 +370,13 @@ class RoombaEnvAToB(gym.Env):
 if __name__ == '__main__':
     from gym.wrappers.monitoring.video_recorder import VideoRecorder
     # Stress test
-    N_PARTICLES=1000
-    SPEED=5
+    config = RoombaEnvConfig()
+    config.n_particles = 1000
+    config.particle_speed = 5
+    config.observation_space = SensorType.VISUAL
 
     # Test the new env
-    env_a_to_b = RoombaEnvAToB(render_mode="rgb_array")
+    env_a_to_b = RoombaEnvAToB(roomba_env_config=config, render_mode="rgb_array")
     video_recorder_a_to_b = VideoRecorder(env_a_to_b, enabled=True, path='a_to_b.mp4')
     for i in range(4):
         for j in range(100):
